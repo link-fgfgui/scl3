@@ -1,0 +1,18 @@
+[package]
+name = "scl3"
+version = "0.1.0"
+edition = "2024"
+
+
+[dependencies]
+slint = {version = "1.16.1", features = ["backend-winit", "renderer-femtovg"] }
+scl-core = { path = "../deps/core" }
+scl-gui-animation = { path = "../deps/gui-animation" }
+# scl-macro = { path = "../deps/macro" }
+
+[build-dependencies]
+slint-build = "1.16.1"
+
+[profile.release]
+codegen-units = 1
+lto = true

@@ -6,6 +6,9 @@ use std::error::Error;
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn Error>> {
+    unsafe {
+        std::env::set_var("SLINT_STYLE", "fluent");
+    }
     let ui = AppWindow::new()?;
 
     ui.on_request_increase_value({
@@ -17,6 +20,5 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     ui.run()?;
-
     Ok(())
 }

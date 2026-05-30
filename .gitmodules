@@ -1,0 +1,9 @@
+[submodule "third_party/marco"]
+	path = deps/marco
+	url = https://github.com/SCLv3-dev/marco.git
+[submodule "third_party/gui-animation"]
+	path = deps/gui-animation
+	url = https://github.com/SCLv3-dev/gui-animation.git
+[submodule "third_party/core"]
+	path = deps/core
+	url = https://github.com/SCLv3-dev/core.git
