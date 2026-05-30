@@ -9,7 +9,15 @@ slint = {version = "1.16.1", features = ["backend-winit", "renderer-femtovg"] }
 scl-core = { path = "../deps/core" }
 scl-gui-animation = { path = "../deps/gui-animation" }
 # scl-macro = { path = "../deps/macro" }
-
+clapfig = "0.21.4"
+confique = { version = "0.4", features = ["toml"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+anyhow = "1"
+dirs = "5"
+keyring = "3.0"
+secrecy = "0.10.3"
+smol = "2"
 [build-dependencies]
 slint-build = "1.16.1"
 

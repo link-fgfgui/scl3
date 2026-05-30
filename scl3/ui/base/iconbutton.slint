@@ -1,0 +1,99 @@
+import { Palette, StyleMetrics } from "std-widgets.slint";
+
+
+export component IconButton {
+    function button-border-radius() -> length {
+        if Platform.style-name == "material" {
+            20px
+        } else if Platform.style-name == "cosmic" {
+            16px
+        } else if Platform.style-name == "cupertino" {
+            5px
+        } else {
+            4px
+        }  // fluent 及其他
+    }
+    in property <image> icon;
+    in property <image> disabled-icon;
+    in property <length> icon-size: 32px;
+    in property <bool> primary;
+    in property <bool> enabled <=> i-touch-area.enabled;
+    in property <bool> checkable;
+    in property <bool> colorize-icon;
+    out property <bool> has-focus: i-focus-scope.has-focus;
+    out property <bool> pressed: self.enabled && i-touch-area.pressed;
+    in-out property <bool> checked;
+    private property <bool> right-pressed: false;
+    private property <bool> any-pressed: root.pressed || root.right-pressed;
+
+    callback clicked;
+
+    min-width: icon-size;
+    min-height: icon-size;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    forward-focus: i-focus-scope;
+
+    accessible-role: button;
+    accessible-enabled: root.enabled;
+    accessible-checkable: root.checkable;
+    accessible-checked: root.checked;
+    accessible-action-default => {
+        i-touch-area.clicked();
+    }
+
+    i-icon := Image {
+        source: !root.enabled && root.disabled-icon.width > 0 ? root.disabled-icon : root.icon;
+        width: root.icon-size;
+        height: root.icon-size;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        colorize: root.colorize-icon ? (root.primary || root.checked ? Palette.accent-foreground : Palette.control-foreground) : transparent;
+
+        states [
+            disabled when !root.enabled: {
+                opacity: root.disabled-icon.width > 0 ? 1 : 0.35;
+            }
+            pressed when root.any-pressed: {
+                opacity: 0.55;
+            }
+            hover when i-touch-area.has-hover: {
+                opacity: 0.8;
+            }
+        ]
+
+        animate opacity { duration: 150ms; }
+    }
+
+    i-touch-area := TouchArea {
+        clicked => {
+            if (root.checkable) {
+                root.checked = !root.checked;
+            }
+            root.clicked();
+        }
+        pointer-event(event) => {
+            if event.button == PointerEventButton.right {
+                if event.kind == PointerEventKind.down {
+                    root.right-pressed = true;
+                } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    root.right-pressed = false;
+                }
+            }
+        }
+    }
+
+    i-focus-scope := FocusScope {
+        x: 0px;
+        width: 0px;
+        enabled <=> root.enabled;
+
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                i-touch-area.clicked();
+                return accept;
+            }
+            return reject;
+        }
+    }
+}

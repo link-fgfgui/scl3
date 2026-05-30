@@ -1,0 +1,57 @@
+import { Palette, StyleMetrics } from "std-widgets.slint";
+
+export component ProgressBar inherits Rectangle {
+    // 暴露属性以便动态更新
+    in-out property <string> task-name: "正在安装 Minecraft 1.16.5";
+    in-out property <float> progress: 0.50;
+
+    // 基础容器样式
+    background: Palette.background;
+    height: layout.preferred-height;
+    // min-width: 400px;
+
+    layout := VerticalLayout {
+
+        padding-left: StyleMetrics.layout-padding;
+        padding-right: StyleMetrics.layout-padding;
+
+        padding-bottom: StyleMetrics.layout-padding;
+        // padding-top: StyleMetrics.layout-padding;
+        // 使用 StyleMetrics 提供的标准间距
+        spacing: StyleMetrics.layout-spacing;
+
+        // 顶部的文字行（名称与百分比分居两侧）
+        HorizontalLayout {
+            Text {
+                text: root.task-name;
+                font-size: 1.1rem;
+                color: Palette.foreground;
+            }
+            
+            // 弹性的空白占位符，用于将百分比文本推至最右侧
+            Rectangle {}
+
+            Text {
+                text: Math.round(root.progress * 100) + "%";
+                font-size: 1.1rem;
+                color: Palette.foreground;
+            }
+        }
+
+        // 底部进度条槽（Track）
+        track := Rectangle {
+            height: 6px;
+            background: Palette.control-background; // 自动适应系统主题的灰色背景
+            border-radius: 3px;
+
+            // 进度条填充（Fill）
+            Rectangle {
+                x: 0;
+                width: parent.width * root.progress;
+                height: parent.height;
+                background: Palette.control-foreground;
+                border-radius: 3px;
+            }
+        }
+    }
+}

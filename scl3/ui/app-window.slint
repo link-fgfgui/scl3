@@ -1,22 +1,102 @@
-import { Button, VerticalBox } from "std-widgets.slint";
-import { Launcher } from "./launcher.slint";
-
+import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+import { Launcher } from "./pages/launcher.slint";
+import { Settings } from "./pages/settings.slint";
+import { MicrosoftLogin } from "./pages/microsoft-login.slint";
+import { ProgressBar } from "./download-bar.slint";
 export component AppWindow inherits Window {
-    width: 600px;
-    height: 800px;
-    in-out property <int> counter: 42;
-    callback request-increase-value();
-    VerticalBox {
-        Text {
-            text: "Counter: \{root.counter}";
-        }
+    width: 300px;
+    height: 450px;
+    in-out property <int> page-index: 0;
+    in-out property <string> download-task-name: "正在安装 Minecraft 1.16.5";
+    in-out property <float> download-progress: 0.314;
 
-        Button {
-            text: "Increase value";
-            clicked => {
-                root.request-increase-value();
+    in-out property <string> game-minecraft-path: "";
+    in-out property <string> game-java-path: "";
+    in-out property <int> download-source-index: 0;
+    in-out property <int> download-parallel-amount: 64;
+    in-out property <bool> download-verify-data: false;
+    in-out property <string> download-curseforge-api-key: "";
+    in-out property <int> launch-max-mem: 0;
+    in-out property <bool> launch-game-independent: true;
+    in-out property <bool> launch-recheck: true;
+    in-out property <string> launch-jvm-args: "";
+    in-out property <string> launch-game-args: "";
+    in-out property <string> launch-window-title: "";
+    in-out property <string> launch-wrapper-path: "";
+    in-out property <string> launch-wrapper-args: "";
+    in-out property <int> appearance-language-index: 0;
+    in-out property <bool> appearance-auto-check-update: true;
+    in-out property <string> auth-microsoft-client-id: "";
+    in-out property <string> auth-microsoft-verification-uri: "";
+    in-out property <string> auth-microsoft-user-code: "";
+    in-out property <string> auth-microsoft-message: "";
+    in-out property <string> auth-microsoft-status: "请输入 Azure AD Client ID，然后获取认证码";
+    in-out property <bool> auth-microsoft-login-in-progress: false;
+    in-out property <bool> auth-microsoft-can-complete-login: false;
+
+    callback launch-game();
+    callback manage-instances();
+    callback open-download();
+    callback open-settings();
+    callback instance-selected(value: string);
+    callback go-back();
+    callback config-changed();
+    callback open-microsoft-login();
+    callback start-microsoft-login();
+    callback complete-microsoft-login();
+
+    VerticalLayout {
+
+
+        Rectangle {
+            min-height: 400px;
+            if page-index == 0: Launcher {
+                launch-game => { root.launch-game(); }
+                manage-instances => { root.manage-instances(); }
+                open-download => { root.open-download(); }
+                open-settings => { root.open-settings(); }
+                instance-selected(value) => { root.instance-selected(value); }
+            }
+            if page-index == 3: Settings {
+                game-minecraft-path <=> root.game-minecraft-path;
+                game-java-path <=> root.game-java-path;
+                download-source-index <=> root.download-source-index;
+                download-parallel-amount <=> root.download-parallel-amount;
+                download-verify-data <=> root.download-verify-data;
+                download-curseforge-api-key <=> root.download-curseforge-api-key;
+                launch-max-mem <=> root.launch-max-mem;
+                launch-game-independent <=> root.launch-game-independent;
+                launch-recheck <=> root.launch-recheck;
+                launch-jvm-args <=> root.launch-jvm-args;
+                launch-game-args <=> root.launch-game-args;
+                launch-window-title <=> root.launch-window-title;
+                launch-wrapper-path <=> root.launch-wrapper-path;
+                launch-wrapper-args <=> root.launch-wrapper-args;
+                appearance-language-index <=> root.appearance-language-index;
+                appearance-auto-check-update <=> root.appearance-auto-check-update;
+                auth-microsoft-client-id <=> root.auth-microsoft-client-id;
+                go-back => { root.go-back(); }
+                config-changed => { root.config-changed(); }
+                open-microsoft-login => { root.open-microsoft-login(); }
+            }
+            if page-index == 4: MicrosoftLogin {
+                client-id <=> root.auth-microsoft-client-id;
+                verification-uri <=> root.auth-microsoft-verification-uri;
+                user-code <=> root.auth-microsoft-user-code;
+                message <=> root.auth-microsoft-message;
+                status-text <=> root.auth-microsoft-status;
+                login-in-progress <=> root.auth-microsoft-login-in-progress;
+                can-complete-login <=> root.auth-microsoft-can-complete-login;
+                go-back => { root.go-back(); }
+                config-changed => { root.config-changed(); }
+                start-microsoft-login => { root.start-microsoft-login(); }
+                complete-microsoft-login => { root.complete-microsoft-login(); }
             }
         }
+        
+        if page-index != 10: ProgressBar {
+            task-name: download-task-name;
+            progress: download-progress;
+        }
     }
-    Launcher {}
 }

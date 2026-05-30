@@ -46,3 +46,4 @@ rust-project.json
 
 assets/
 lib-src/
+.trae/

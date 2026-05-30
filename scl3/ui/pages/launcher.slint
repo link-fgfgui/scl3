@@ -1,0 +1,182 @@
+import { Button, ComboBox } from "std-widgets.slint";
+import { IconButton } from "../base/iconbutton.slint";
+
+
+
+export component Launcher inherits Rectangle {
+    width: 300px;
+    height: 400px;
+
+    in-out property <length> square-btn-size: 40px;
+    in-out property <string> launch-button-text: "Launch";
+    in-out property <string> player-name: "Player";
+    in-out property <string> tip-text: "Tip: Select an instance to get started";
+    in-out property <[string]> instance-model: ["Inst 1", "Inst 2", "Inst 3"];
+    in-out property <image> avatar-image: @image-url("../../assets/icon-player-avatar.svg");
+    in-out property <image> login-method-icon: @image-url("../../assets/icon-login-method.svg");
+
+    callback launch-game();
+    callback manage-instances();
+    callback open-download();
+    callback open-settings();
+    callback instance-selected(value: string);
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        // ==========================================
+        // 1. Top Section: Player Info (Weight: 8)
+        // ==========================================
+        Rectangle {
+            vertical-stretch: 8;
+
+            VerticalLayout {
+                alignment: center; // 控制整体在垂直方向上居中
+                spacing: 8px;
+
+                // 1. 头像部分：用 HorizontalLayout 包裹实现水平居中
+                HorizontalLayout {
+                    alignment: center;
+                    Image {
+                        width: 100px;
+                        height: 100px;
+                        source: root.avatar-image;
+                    }
+                }
+
+                // 2. 登录信息部分：去掉固定宽度，设置 alignment: center 实现水平居中
+                HorizontalLayout {
+                    height: 24px;
+                    alignment: center; 
+                    spacing: 8px;
+
+                    // Login Method Icon (icon-login-method)
+                    Image {
+                        width: 24px;
+                        height: 24px;
+                        source: root.login-method-icon;
+                    }
+
+                    // Player Name Label
+                    Text {
+                        font-size: 12px;
+                        vertical-alignment: center;
+                        text: root.player-name;
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 2. Middle Section: Divider (Weight: 1)
+        // ==========================================
+        Rectangle {
+            vertical-stretch: 1;
+            min-height: 0px;
+            background: transparent;
+        }
+
+        // ==========================================
+        // 3. Bottom Section: Main Control Area (Weight: 9)
+        // ==========================================
+        VerticalLayout {
+            vertical-stretch: 9;
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-top: 0px;
+            padding-bottom: 8px;
+            spacing: 6px;
+            alignment: end;
+
+            // Notification/Tip Bar (rec-launcher-tip - responsive width)
+            HorizontalLayout {
+                height: 24px;
+                spacing: 6px;
+
+                // Tip Icon (icon-tip)
+                Image {
+                    width: 24px;
+                    source: @image-url("../../assets/icon-tip.svg");
+                }
+
+                // Tip Text (tet-tip - stretches elastically)
+                Text {
+                    font-size: 11px;
+                    vertical-alignment: center;
+                    text: root.tip-text;
+                }
+            }
+
+            // Buttons Grid Layout (rec-launcher-btns - purely fluid grid)
+            GridLayout {
+                spacing: 4px;
+
+                // --- Row 0 ---
+                // 左侧：实例管理按钮（固定正方形）
+                IconButton {
+                    row: 0; col: 0;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    icon: @image-url("../../assets/icon-instance-manage.svg");
+                    clicked => { root.manage-instances(); }
+                }
+                // 中间：实例选择框（自动横向拉伸，高度对齐按钮）
+                ComboBox {
+                    row: 0; col: 1; colspan: 2;
+                    height: square-btn-size; 
+                    model: root.instance-model;
+                    selected(value) => { root.instance-selected(value); }
+                }
+                // 右侧：下载按钮（固定正方形）
+                IconButton {
+                    row: 0; col: 3;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    icon: @image-url("../../assets/icon-download.svg");
+                    clicked => { root.open-download(); }
+                }
+
+                // --- Row 1 ---
+                // 左侧：空白按钮 1
+                IconButton {
+                    row: 1; col: 0;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    // text: "•••";
+                }
+                // 中间：核心启动按钮（跨 2 行 2 列，高度由网格行高自动撑开）
+                Button {
+                    row: 1; col: 1; colspan: 2; rowspan: 2;
+                    text: launch-button-text;
+                    primary: true;
+                    clicked => { root.launch-game(); }
+                }
+                // 右侧：空白按钮 1
+                IconButton {
+                    row: 1; col: 3;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    // text: "•••";
+                }
+
+                // --- Row 2 ---
+                // 左侧：空白按钮 2
+                IconButton {
+                    row: 2; col: 0;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    // text: "•••";
+                }
+                // 右侧：设置按钮
+                IconButton {
+                    row: 2; col: 3;
+                    width: square-btn-size;
+                    height: square-btn-size;
+                    icon: @image-url("../../assets/icon-settings.svg");
+                    clicked => { root.open-settings(); }
+                }
+            }
+        }
+    }
+}
