@@ -1,4 +1,4 @@
-import { Palette, StyleMetrics } from "std-widgets.slint";
+import { Palette, StyleMetrics, ProgressIndicator } from "std-widgets.slint";
 
 export component ProgressBar inherits Rectangle {
     // 暴露属性以便动态更新
@@ -39,19 +39,8 @@ export component ProgressBar inherits Rectangle {
         }
 
         // 底部进度条槽（Track）
-        track := Rectangle {
-            height: 6px;
-            background: Palette.control-background; // 自动适应系统主题的灰色背景
-            border-radius: 3px;
-
-            // 进度条填充（Fill）
-            Rectangle {
-                x: 0;
-                width: parent.width * root.progress;
-                height: parent.height;
-                background: Palette.control-foreground;
-                border-radius: 3px;
-            }
+        ProgressIndicator {
+            progress: root.progress;
         }
     }
 }

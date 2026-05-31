@@ -1,0 +1,120 @@
+import { Palette, StyleMetrics } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+component JavaListItem inherits Rectangle {
+    in property <string> badge-text;
+    in property <string> title;
+    in property <string> subtitle;
+    in property <bool> is-action: false;
+    in property <bool> default-active: false;
+
+    callback clicked;
+
+    height: root.is-action ? 50px : 68px;
+
+    background: touch.has-hover || root.default-active ? Palette.alternate-background : transparent;
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+
+    HorizontalLayout {
+        padding-left: StyleMetrics.layout-padding;
+        padding-right: StyleMetrics.layout-padding;
+        spacing: StyleMetrics.layout-spacing;
+        alignment: start;
+
+        Rectangle {
+            width: 32px;
+            height: root.height;
+
+            if (!root.is-action) : Rectangle {
+                width: 100%;
+                height: 100%;
+
+                Text {
+                    text: "☕";
+                    font-size: 2rem;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+
+                if (root.badge-text != "") : Rectangle {
+                    background: Palette.foreground;
+                    border-radius: 4px;
+                    width: 22px;
+                    height: 14px;
+                    x: 16px;
+                    y: 36px;
+
+                    Text {
+                        text: root.badge-text;
+                        color: Palette.background;
+                        font-size: 0.83rem;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            if (root.is-action) : Rectangle {
+                width: 26px;
+                height: 26px;
+                y: (parent.height - self.height) / 2;
+
+                Rectangle { width: 100%; height: 4px; background: Palette.foreground; y: 11px; }
+                Rectangle { width: 4px; height: 100%; background: Palette.foreground; x: 11px; }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: StyleMetrics.layout-spacing;
+
+            Text {
+                text: root.title;
+                font-size: 1.25rem;
+                color: Palette.foreground;
+            }
+
+            if (!root.is-action && root.subtitle != "") : Text {
+                text: root.subtitle;
+                font-size: 1.08rem;
+                color: Palette.alternate-foreground;
+            }
+        }
+    }
+}
+
+export component JavaChoosePage inherits PageContainer {
+    width: 340px;
+    height: 420px;
+    content-padding-left: 0px;
+    content-padding-right: 0px;
+
+    JavaListItem {
+        badge-text: "8+";
+        title: "PATH 环境变量里的 Java 8+";
+        subtitle: "java";
+        clicked => { }
+    }
+
+    JavaListItem {
+        badge-text: "16+";
+        title: "PATH 环境变量里的 Java 16+";
+        subtitle: "java";
+    }
+
+    Rectangle { height: 12px; }
+
+    JavaListItem {
+        is-action: true;
+        title: "添加新的 Java 运行时";
+    }
+
+    JavaListItem {
+        is-action: true;
+        title: "尝试搜索可用 Java 运行时";
+        default-active: true;
+    }
+}

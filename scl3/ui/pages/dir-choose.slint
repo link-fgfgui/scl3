@@ -1,0 +1,90 @@
+import { Palette, StyleMetrics, Button } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+component ListItem inherits Rectangle {
+    in property <string> icon;
+    in property <string> text;
+    in property <bool> show-indicator: false;
+
+    height: 40px;
+
+    HorizontalLayout {
+        spacing: StyleMetrics.layout-spacing;
+
+        VerticalLayout {
+            alignment: center;
+            Text {
+                text: root.icon;
+                font-size: 1.5rem;
+                color: Palette.foreground;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            Text {
+                text: root.text;
+                font-size: 1.33rem;
+                color: Palette.foreground;
+            }
+        }
+
+        if (root.show-indicator) : VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 10px;
+                height: 10px;
+                background: Palette.foreground;
+                border-radius: 5px;
+            }
+        }
+    }
+}
+
+export component GameFolderManagerPage inherits PageContainer {
+    width: 360px;
+    height: 480px;
+
+    VerticalLayout {
+        spacing: StyleMetrics.layout-spacing;
+
+        ListItem {
+            icon: "📁";
+            text: "当前游戏文件夹";
+            show-indicator: true;
+        }
+
+        ListItem {
+            icon: "📁";
+            text: "官方游戏文件夹";
+            show-indicator: false;
+        }
+    }
+
+    Rectangle {}
+
+    TouchArea {
+        height: 40px;
+
+        HorizontalLayout {
+            spacing: StyleMetrics.layout-spacing;
+
+            VerticalLayout {
+                alignment: center;
+                Button {
+                    height: 32px;
+                    text: "＋";
+                    max-width: 32px;
+                }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Button {
+                    text: "添加新的文件夹";
+                }
+            }
+        }
+    }
+}

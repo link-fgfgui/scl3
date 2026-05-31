@@ -1,0 +1,230 @@
+import { Button, LineEdit, Palette, StyleMetrics, ScrollView } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+export component Login inherits PageContainer {
+    width: 300px;
+    height: 400px;
+
+    in-out property <int> selected-method: 0;
+    in-out property <string> ext-auth-server: "";
+    in-out property <string> ext-email: "";
+    in-out property <string> ext-password: "";
+    in-out property <string> offline-username: "Player";
+    in-out property <string> login-status: "";
+    in-out property <bool> login-in-progress: false;
+
+    callback open-microsoft-login();
+    callback start-external-login(server: string, email: string, password: string);
+    callback start-offline-login(username: string);
+
+    ScrollView {
+        VerticalLayout {
+            padding: StyleMetrics.layout-padding;
+            spacing: StyleMetrics.layout-spacing;
+
+            Rectangle {
+                height: 44px;
+                border-radius: 8px;
+                background: root.selected-method == 1 ? Palette.accent-background : Palette.control-background;
+
+                TouchArea {
+                    clicked => { root.selected-method = 1; }
+                }
+
+                HorizontalLayout {
+                    padding-left: StyleMetrics.layout-padding;
+                    padding-right: StyleMetrics.layout-padding;
+                    spacing: StyleMetrics.layout-spacing;
+
+                    Image {
+                        width: 24px;
+                        height: 24px;
+                        source: @image-url("../../assets/icon-login-method.svg");
+                    }
+
+                    VerticalLayout {
+                        Text {
+                            font-size: 1rem;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            text: "微软登录";
+                        }
+                        Text {
+                            font-size: 0.75rem;
+                            vertical-alignment: center;
+                            color: Palette.foreground;
+                            text: "使用 Microsoft 账号进行正版登录";
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 44px;
+                border-radius: 8px;
+                background: root.selected-method == 2 ? Palette.accent-background : Palette.control-background;
+
+                TouchArea {
+                    clicked => { root.selected-method = 2; }
+                }
+
+                HorizontalLayout {
+                    padding-left: StyleMetrics.layout-padding;
+                    padding-right: StyleMetrics.layout-padding;
+                    spacing: StyleMetrics.layout-spacing;
+
+                    Image {
+                        width: 24px;
+                        height: 24px;
+                        source: @image-url("../../assets/icon-login-method.svg");
+                    }
+
+                    VerticalLayout {
+                        Text {
+                            font-size: 1rem;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            text: "外置登录";
+                        }
+                        Text {
+                            font-size: 0.75rem;
+                            vertical-alignment: center;
+                            color: Palette.foreground;
+                            text: "使用第三方认证服务器登录";
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                height: 44px;
+                border-radius: 8px;
+                background: root.selected-method == 3 ? Palette.accent-background : Palette.control-background;
+
+                TouchArea {
+                    clicked => { root.selected-method = 3; }
+                }
+
+                HorizontalLayout {
+                    padding-left: StyleMetrics.layout-padding;
+                    padding-right: StyleMetrics.layout-padding;
+                    spacing: StyleMetrics.layout-spacing;
+
+                    Image {
+                        width: 24px;
+                        height: 24px;
+                        source: @image-url("../../assets/icon-login-method.svg");
+                    }
+
+                    VerticalLayout {
+                        Text {
+                            font-size: 1rem;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                            text: "离线登录";
+                        }
+                        Text {
+                            font-size: 0.75rem;
+                            vertical-alignment: center;
+                            color: Palette.foreground;
+                            text: "无需网络连接，直接进入游戏";
+                        }
+                    }
+                }
+            }
+
+            if root.selected-method == 1: VerticalLayout {
+                spacing: StyleMetrics.layout-spacing;
+
+                Text {
+                    font-size: 0.92rem;
+                    color: Palette.foreground;
+                    wrap: word-wrap;
+                    text: "使用 Microsoft 设备码流进行登录认证，需要有效的 Azure AD 应用程序。";
+                }
+
+                Button {
+                    text: "前往微软登录";
+                    primary: true;
+                    clicked => { root.open-microsoft-login(); }
+                }
+            }
+
+            if root.selected-method == 2: VerticalLayout {
+                spacing: StyleMetrics.layout-spacing;
+
+                Text { text: "认证服务器"; font-size: 0.92rem; color: Palette.foreground; }
+                LineEdit {
+                    text: root.ext-auth-server;
+                    placeholder-text: "例如: https://littleskin.cn/api/yggdrasil";
+                    edited(val) => { root.ext-auth-server = val; }
+                    enabled: !root.login-in-progress;
+                }
+
+                Text { text: "邮箱"; font-size: 0.92rem; color: Palette.foreground; }
+                LineEdit {
+                    text: root.ext-email;
+                    placeholder-text: "输入邮箱地址";
+                    edited(val) => { root.ext-email = val; }
+                    enabled: !root.login-in-progress;
+                }
+
+                Text { text: "密码"; font-size: 0.92rem; color: Palette.foreground; }
+                LineEdit {
+                    text: root.ext-password;
+                    placeholder-text: "输入密码";
+                    input-type: password;
+                    edited(val) => { root.ext-password = val; }
+                    enabled: !root.login-in-progress;
+                }
+
+                if root.login-status != "": Text {
+                    font-size: 0.83rem;
+                    color: Palette.foreground;
+                    wrap: word-wrap;
+                    text: root.login-status;
+                }
+
+                Button {
+                    text: "登录";
+                    primary: true;
+                    enabled: !root.login-in-progress;
+                    clicked => { root.start-external-login(root.ext-auth-server, root.ext-email, root.ext-password); }
+                }
+            }
+
+            if root.selected-method == 3: VerticalLayout {
+                spacing: StyleMetrics.layout-spacing;
+
+                Text {
+                    font-size: 0.92rem;
+                    color: Palette.foreground;
+                    wrap: word-wrap;
+                    text: "离线模式无需验证，输入用户名后即可进入游戏。";
+                }
+
+                Text { text: "玩家名称"; font-size: 0.92rem; color: Palette.foreground; }
+                LineEdit {
+                    text: root.offline-username;
+                    placeholder-text: "输入玩家名称";
+                    edited(val) => { root.offline-username = val; }
+                    enabled: !root.login-in-progress;
+                }
+
+                if root.login-status != "": Text {
+                    font-size: 0.83rem;
+                    color: Palette.foreground;
+                    wrap: word-wrap;
+                    text: root.login-status;
+                }
+
+                Button {
+                    text: "开始游戏";
+                    primary: true;
+                    enabled: !root.login-in-progress;
+                    clicked => { root.start-offline-login(root.offline-username); }
+                }
+            }
+        }
+    }
+}

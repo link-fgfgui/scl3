@@ -1,102 +1,80 @@
-import { Button, LineEdit, Palette, StyleMetrics } from "std-widgets.slint";
-import { IconButton } from "../base/iconbutton.slint";
+import { Button, LineEdit, Palette, StyleMetrics, Spinner } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
 
-export component MicrosoftLogin inherits Rectangle {
+export component MicrosoftLogin inherits PageContainer {
     width: 300px;
     height: 400px;
 
-    in-out property <string> client-id: "";
     in-out property <string> verification-uri: "";
     in-out property <string> user-code: "";
     in-out property <string> message: "";
-    in-out property <string> status-text: "请输入 Azure AD Client ID，然后获取认证码";
+    in-out property <string> status-text: "正在获取认证码...";
     in-out property <bool> login-in-progress: false;
     in-out property <bool> can-complete-login: false;
 
-    callback go-back();
     callback start-microsoft-login();
     callback complete-microsoft-login();
-    callback config-changed();
+
+    init => {
+        root.start-microsoft-login();
+    }
 
     VerticalLayout {
-        padding: 0px;
-        spacing: 0px;
+        padding: StyleMetrics.layout-padding;
+        spacing: StyleMetrics.layout-spacing;
 
-        HorizontalLayout {
-            height: 36px;
-            padding-left: 8px;
-            padding-right: 8px;
-            spacing: 8px;
-            alignment: start;
-
-            IconButton {
-                width: 28px;
-                height: 28px;
-                icon-size: 28px;
-                icon: @image-url("../../assets/icon-settings.svg");
-                clicked => { root.go-back(); }
-            }
-
-            Text {
-                font-size: 14px;
-                font-weight: 700;
-                vertical-alignment: center;
-                text: "微软登录";
-            }
+        Text { text: "验证链接"; font-size: 0.92rem; color: Palette.foreground; }
+        LineEdit {
+            text: root.verification-uri;
+            placeholder-text: "点击获取认证码后显示";
         }
 
-        VerticalLayout {
-            padding: StyleMetrics.layout-padding;
-            spacing: StyleMetrics.layout-spacing;
+        Text { text: "认证码"; font-size: 0.92rem; color: Palette.foreground; }
+        LineEdit {
+            text: root.user-code;
+            placeholder-text: "复制到微软登录页面";
+        }
 
-            Text { text: "Azure AD Client ID"; font-size: 11px; color: Palette.foreground; }
-            LineEdit {
-                text: root.client-id;
-                placeholder-text: "设备码登录需要 Client ID";
-                edited(val) => { root.client-id = val; root.config-changed(); }
-            }
+        Text {
+            text: root.message;
+            font-size: 0.92rem;
+            color: Palette.foreground;
+            wrap: word-wrap;
+        }
 
-            Text { text: "验证链接"; font-size: 11px; color: Palette.foreground; }
-            LineEdit {
-                text: root.verification-uri;
-                placeholder-text: "点击获取认证码后显示";
-            }
+        if root.login-in-progress : HorizontalLayout {
+            alignment: center;
+            height: 32px;
 
-            Text { text: "认证码"; font-size: 11px; color: Palette.foreground; }
-            LineEdit {
-                text: root.user-code;
-                placeholder-text: "复制到微软登录页面";
-            }
-
-            Text {
-                text: root.message;
-                font-size: 11px;
-                color: Palette.foreground;
-                wrap: word-wrap;
+            Spinner {
+                indeterminate: true;
+                width: 24px;
+                height: 24px;
             }
 
             Text {
                 text: root.status-text;
-                font-size: 11px;
+                font-size: 0.92rem;
                 color: Palette.foreground;
-                wrap: word-wrap;
+                vertical-alignment: center;
             }
+        }
 
-            HorizontalLayout {
-                spacing: 8px;
+        if !root.login-in-progress : Text {
+            text: root.status-text;
+            font-size: 0.92rem;
+            color: Palette.foreground;
+            wrap: word-wrap;
+        }
 
-                Button {
-                    text: root.login-in-progress ? "正在获取..." : "获取认证码";
-                    enabled: !root.login-in-progress;
-                    clicked => { root.start-microsoft-login(); }
-                }
+        HorizontalLayout {
+            spacing: 8px;
 
-                Button {
-                    text: "完成登录";
-                    primary: true;
-                    enabled: root.can-complete-login && !root.login-in-progress;
-                    clicked => { root.complete-microsoft-login(); }
-                }
+            Button {
+                text: "完成登录";
+                primary: true;
+                enabled: root.can-complete-login && !root.login-in-progress;
+                clicked => { root.complete-microsoft-login(); }
             }
         }
     }

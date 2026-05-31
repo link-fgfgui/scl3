@@ -1,8 +1,6 @@
 import { Button, ComboBox } from "std-widgets.slint";
 import { IconButton } from "../base/iconbutton.slint";
 
-
-
 export component Launcher inherits Rectangle {
     width: 300px;
     height: 400px;
@@ -13,73 +11,86 @@ export component Launcher inherits Rectangle {
     in-out property <string> tip-text: "Tip: Select an instance to get started";
     in-out property <[string]> instance-model: ["Inst 1", "Inst 2", "Inst 3"];
     in-out property <image> avatar-image: @image-url("../../assets/icon-player-avatar.svg");
-    in-out property <image> login-method-icon: @image-url("../../assets/icon-login-method.svg");
+    in-out property <int> login-method-type: 0;
+    in-out property <image> add-account-image: @image-url("../../assets/icon-add-account.svg");
+
+    in-out property <int> current-account-index: 0;
+    in-out property <int> account-count: 0;
+    in-out property <int> selected-instance-index: -1;
+
+    property <bool> is-add-account: root.current-account-index == root.account-count;
 
     callback launch-game();
     callback manage-instances();
     callback open-download();
     callback open-settings();
     callback instance-selected(value: string);
+    callback account-switched(index: int);
+    callback open-login();
 
     VerticalLayout {
         padding: 0px;
         spacing: 0px;
 
-        // ==========================================
-        // 1. Top Section: Player Info (Weight: 8)
-        // ==========================================
         Rectangle {
             vertical-stretch: 8;
 
             VerticalLayout {
-                alignment: center; // 控制整体在垂直方向上居中
+                alignment: center;
                 spacing: 8px;
 
-                // 1. 头像部分：用 HorizontalLayout 包裹实现水平居中
                 HorizontalLayout {
                     alignment: center;
-                    Image {
+                    TouchArea {
                         width: 100px;
                         height: 100px;
-                        source: root.avatar-image;
+                        Image {
+                            width: 100px;
+                            height: 100px;
+                            source: root.is-add-account ? root.add-account-image : root.avatar-image;
+                        }
+                        scroll-event(event) => {
+                            if event.delta-y > 0px {
+                                root.current-account-index = Math.mod(root.current-account-index - 1 + root.account-count + 1, root.account-count + 1);
+                                root.account-switched(root.current-account-index);
+                                accept
+                            } else if event.delta-y < 0px {
+                                root.current-account-index = Math.mod(root.current-account-index + 1, root.account-count + 1);
+                                root.account-switched(root.current-account-index);
+                                accept
+                            } else {
+                                reject
+                            }
+                        }
                     }
                 }
 
-                // 2. 登录信息部分：去掉固定宽度，设置 alignment: center 实现水平居中
                 HorizontalLayout {
                     height: 24px;
-                    alignment: center; 
+                    alignment: center;
                     spacing: 8px;
 
-                    // Login Method Icon (icon-login-method)
-                    Image {
+                    if !root.is-add-account: Image {
                         width: 24px;
                         height: 24px;
-                        source: root.login-method-icon;
+                        source: root.login-method-type == 1 ? @image-url("../../assets/icon-login-microsoft.svg") : root.login-method-type == 2 ? @image-url("../../assets/icon-login-authlib.svg") : @image-url("../../assets/icon-login-offline.svg");
                     }
 
-                    // Player Name Label
                     Text {
-                        font-size: 12px;
+                        font-size: 1rem;
                         vertical-alignment: center;
-                        text: root.player-name;
+                        text: root.is-add-account ? "添加账号" : root.player-name;
                     }
                 }
             }
         }
 
-        // ==========================================
-        // 2. Middle Section: Divider (Weight: 1)
-        // ==========================================
         Rectangle {
             vertical-stretch: 1;
             min-height: 0px;
             background: transparent;
         }
 
-        // ==========================================
-        // 3. Bottom Section: Main Control Area (Weight: 9)
-        // ==========================================
         VerticalLayout {
             vertical-stretch: 9;
             padding-left: 10px;
@@ -89,31 +100,25 @@ export component Launcher inherits Rectangle {
             spacing: 6px;
             alignment: end;
 
-            // Notification/Tip Bar (rec-launcher-tip - responsive width)
             HorizontalLayout {
                 height: 24px;
                 spacing: 6px;
 
-                // Tip Icon (icon-tip)
                 Image {
                     width: 24px;
                     source: @image-url("../../assets/icon-tip.svg");
                 }
 
-                // Tip Text (tet-tip - stretches elastically)
                 Text {
-                    font-size: 11px;
+                    font-size: 0.92rem;
                     vertical-alignment: center;
                     text: root.tip-text;
                 }
             }
 
-            // Buttons Grid Layout (rec-launcher-btns - purely fluid grid)
             GridLayout {
                 spacing: 4px;
 
-                // --- Row 0 ---
-                // 左侧：实例管理按钮（固定正方形）
                 IconButton {
                     row: 0; col: 0;
                     width: square-btn-size;
@@ -121,14 +126,13 @@ export component Launcher inherits Rectangle {
                     icon: @image-url("../../assets/icon-instance-manage.svg");
                     clicked => { root.manage-instances(); }
                 }
-                // 中间：实例选择框（自动横向拉伸，高度对齐按钮）
                 ComboBox {
                     row: 0; col: 1; colspan: 2;
-                    height: square-btn-size; 
+                    height: square-btn-size;
                     model: root.instance-model;
+                    current-index <=> root.selected-instance-index;
                     selected(value) => { root.instance-selected(value); }
                 }
-                // 右侧：下载按钮（固定正方形）
                 IconButton {
                     row: 0; col: 3;
                     width: square-btn-size;
@@ -137,38 +141,34 @@ export component Launcher inherits Rectangle {
                     clicked => { root.open-download(); }
                 }
 
-                // --- Row 1 ---
-                // 左侧：空白按钮 1
                 IconButton {
                     row: 1; col: 0;
                     width: square-btn-size;
                     height: square-btn-size;
-                    // text: "•••";
                 }
-                // 中间：核心启动按钮（跨 2 行 2 列，高度由网格行高自动撑开）
                 Button {
                     row: 1; col: 1; colspan: 2; rowspan: 2;
-                    text: launch-button-text;
+                    text: root.is-add-account ? "登录" : root.launch-button-text;
                     primary: true;
-                    clicked => { root.launch-game(); }
+                    clicked => {
+                        if root.is-add-account {
+                            root.open-login();
+                        } else {
+                            root.launch-game();
+                        }
+                    }
                 }
-                // 右侧：空白按钮 1
                 IconButton {
                     row: 1; col: 3;
                     width: square-btn-size;
                     height: square-btn-size;
-                    // text: "•••";
                 }
 
-                // --- Row 2 ---
-                // 左侧：空白按钮 2
                 IconButton {
                     row: 2; col: 0;
                     width: square-btn-size;
                     height: square-btn-size;
-                    // text: "•••";
                 }
-                // 右侧：设置按钮
                 IconButton {
                     row: 2; col: 3;
                     width: square-btn-size;

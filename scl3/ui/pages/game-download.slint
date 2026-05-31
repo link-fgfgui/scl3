@@ -1,0 +1,115 @@
+import { LineEdit, Palette, StyleMetrics } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+struct ComponentData {
+    icon: string,
+    icon_color: color,
+    name: string,
+    status: string,
+}
+
+component ComponentRow inherits Rectangle {
+    in property <string> icon;
+    in property <color> icon_color;
+    in property <string> name;
+    in property <string> status;
+
+    height: 38px;
+    background: transparent;
+
+    HorizontalLayout {
+        alignment: space-between;
+
+        HorizontalLayout {
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            Text {
+                text: root.icon;
+                font-size: 1.5rem;
+                color: root.icon_color;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: root.name;
+                font-size: 1.25rem;
+                color: Palette.foreground;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.status;
+            font-size: 1.17rem;
+            color: root.status == "请求失败" ? #ff3333 : Palette.alternate-foreground;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component GameDownloadPage inherits PageContainer {
+    width: 350px;
+    height: 440px;
+
+    in-out property <string> game-version: "26.1.2";
+    in-out property <[ComponentData]> components: [
+        { icon: "🟩", icon_color: #7fa645, name: "Minecraft", status: "26.1.2" },
+        { icon: "⚒️", icon_color: #707070, name: "Forge", status: "可安装" },
+        { icon: "🔥", icon_color: #e65100, name: "NeoForge", status: "可安装" },
+        { icon: "🧵", icon_color: #d7ccc8, name: "Fabric", status: "可安装" },
+        { icon: "🔮", icon_color: #7b1fa2, name: "QuiltMC", status: "请求失败" },
+        { icon: "📁", icon_color: #555555, name: "安装目录", status: "当前游戏文件夹" }
+    ];
+
+    Text {
+        text: "游戏版本名称";
+        font-size: 1.17rem;
+        color: Palette.foreground;
+    }
+
+    LineEdit {
+        text: root.game-version;
+        font-size: 1.25rem;
+        height: 36px;
+    }
+
+    Rectangle { height: 6px; }
+
+    Text {
+        text: "游戏组件";
+        font-size: 1.17rem;
+        color: Palette.foreground;
+    }
+
+    VerticalLayout {
+        spacing: StyleMetrics.layout-spacing;
+        for comp in root.components : ComponentRow {
+            icon: comp.icon;
+            icon_color: comp.icon_color;
+            name: comp.name;
+            status: comp.status;
+        }
+    }
+
+    Rectangle { min-height: 10px; }
+
+    Rectangle {
+        background: Palette.accent-background;
+        border-radius: 6px;
+        height: 42px;
+
+        Text {
+            text: "安装游戏";
+            color: Palette.accent-foreground;
+            font-size: 1.33rem;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        TouchArea {
+            clicked => {
+            }
+        }
+    }
+}

@@ -1,9 +1,20 @@
-import { Button, ComboBox, LineEdit, SpinBox, Switch, GroupBox,
-         ScrollView, TabWidget, HorizontalBox, VerticalBox,
-         Palette, StyleMetrics } from "std-widgets.slint";
-import { IconButton } from "../base/iconbutton.slint";
+import {
+    Button,
+    ComboBox,
+    LineEdit,
+    SpinBox,
+    Switch,
+    GroupBox,
+    ScrollView,
+    TabWidget,
+    HorizontalBox,
+    VerticalBox,
+    Palette,
+    StyleMetrics,
+} from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
 
-export component Settings inherits Rectangle {
+export component Settings inherits PageContainer {
     width: 300px;
     height: 400px;
 
@@ -29,309 +40,371 @@ export component Settings inherits Rectangle {
     in-out property <[string]> appearance-language-model: ["zh-CN", "en-US"];
     in-out property <bool> appearance-auto-check-update: true;
 
-    in-out property <string> auth-microsoft-client-id: "";
-
-    callback go-back();
     callback config-changed();
     callback open-microsoft-login();
 
-    VerticalLayout {
-        padding: 0px;
-        spacing: 0px;
+    TabWidget {
+        Tab {
+            title: "游戏";
 
-        HorizontalLayout {
-            height: 36px;
-            padding-left: 8px;
-            padding-right: 8px;
-            spacing: 8px;
-            alignment: start;
+            ScrollView {
+                VerticalLayout {
+                    spacing: StyleMetrics.layout-spacing;
+                    padding: StyleMetrics.layout-padding;
 
-            IconButton {
-                width: 28px;
-                height: 28px;
-                icon-size: 28px;
-                icon: @image-url("../../assets/icon-settings.svg");
-                clicked => { root.go-back(); }
-            }
+                    GroupBox {
+                        title: "游戏路径";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-            Text {
-                font-size: 14px;
-                font-weight: 700;
-                vertical-alignment: center;
-                text: "设置";
-            }
-        }
+                            Text {
+                                text: "Minecraft 目录";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
 
-        TabWidget {
-            Tab {
-                title: "游戏";
-
-                ScrollView {
-                    VerticalLayout {
-                        spacing: StyleMetrics.layout-spacing;
-                        padding: StyleMetrics.layout-padding;
-
-                        GroupBox {
-                            title: "游戏路径";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
-
-                                Text { text: "Minecraft 目录"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.game-minecraft-path;
-                                    placeholder-text: "留空使用系统默认路径";
-                                    edited(val) => { root.game-minecraft-path = val; root.config-changed(); }
+                            LineEdit {
+                                text: root.game-minecraft-path;
+                                placeholder-text: "留空使用系统默认路径";
+                                edited(val) => {
+                                    root.game-minecraft-path = val;
+                                    root.config-changed();
                                 }
+                            }
 
-                                Text { text: "Java 路径"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.game-java-path;
-                                    placeholder-text: "留空使用系统默认路径";
-                                    edited(val) => { root.game-java-path = val; root.config-changed(); }
+                            Text {
+                                text: "Java 路径";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.game-java-path;
+                                placeholder-text: "留空使用系统默认路径";
+                                edited(val) => {
+                                    root.game-java-path = val;
+                                    root.config-changed();
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            Tab {
-                title: "下载";
+        Tab {
+            title: "下载";
 
-                ScrollView {
-                    VerticalLayout {
-                        spacing: StyleMetrics.layout-spacing;
-                        padding: StyleMetrics.layout-padding;
+            ScrollView {
+                VerticalLayout {
+                    spacing: StyleMetrics.layout-spacing;
+                    padding: StyleMetrics.layout-padding;
 
-                        GroupBox {
-                            title: "下载源";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "下载源";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                ComboBox {
-                                    model: root.download-source-model;
-                                    current-index: root.download-source-index;
-                                    selected(val) => {
-                                        root.download-source-index = self.current-index;
+                            ComboBox {
+                                model: root.download-source-model;
+                                current-index: root.download-source-index;
+                                selected(val) => {
+                                    root.download-source-index = self.current-index;
+                                    root.config-changed();
+                                }
+                            }
+                        }
+                    }
+
+                    GroupBox {
+                        title: "下载选项";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "并发量";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
+                                }
+
+                                SpinBox {
+                                    value: root.download-parallel-amount;
+                                    minimum: 0;
+                                    maximum: 256;
+                                    edited(val) => {
+                                        root.download-parallel-amount = val;
+                                        root.config-changed();
+                                    }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "验证 SHA1";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
+                                }
+
+                                Switch {
+                                    checked: root.download-verify-data;
+                                    toggled => {
+                                        root.download-verify-data = self.checked;
                                         root.config-changed();
                                     }
                                 }
                             }
                         }
+                    }
 
-                        GroupBox {
-                            title: "下载选项";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "CurseForge";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "并发量"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    SpinBox {
-                                        value: root.download-parallel-amount;
-                                        minimum: 0;
-                                        maximum: 256;
-                                        edited(val) => { root.download-parallel-amount = val; root.config-changed(); }
-                                    }
-                                }
-
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "验证 SHA1"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    Switch {
-                                        checked: root.download-verify-data;
-                                        toggled => { root.download-verify-data = self.checked; root.config-changed(); }
-                                    }
-                                }
+                            Text {
+                                text: "API Key";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
                             }
-                        }
 
-                        GroupBox {
-                            title: "CurseForge";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
-
-                                Text { text: "API Key"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.download-curseforge-api-key;
-                                    placeholder-text: "留空则从环境变量读取";
-                                    input-type: password;
-                                    edited(val) => { root.download-curseforge-api-key = val; root.config-changed(); }
+                            LineEdit {
+                                text: root.download-curseforge-api-key;
+                                placeholder-text: "留空则从环境变量读取";
+                                input-type: password;
+                                edited(val) => {
+                                    root.download-curseforge-api-key = val;
+                                    root.config-changed();
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            Tab {
-                title: "启动";
+        Tab {
+            title: "启动";
 
-                ScrollView {
-                    VerticalLayout {
-                        spacing: StyleMetrics.layout-spacing;
-                        padding: StyleMetrics.layout-padding;
+            ScrollView {
+                VerticalLayout {
+                    spacing: StyleMetrics.layout-spacing;
+                    padding: StyleMetrics.layout-padding;
 
-                        GroupBox {
-                            title: "内存与模式";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "内存与模式";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "最大内存 (MB)"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    SpinBox {
-                                        value: root.launch-max-mem;
-                                        minimum: 0;
-                                        maximum: 65536;
-                                        step-size: 512;
-                                        edited(val) => { root.launch-max-mem = val; root.config-changed(); }
-                                    }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "最大内存 (MB)";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
                                 }
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "版本独立模式"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    Switch {
-                                        checked: root.launch-game-independent;
-                                        toggled => { root.launch-game-independent = self.checked; root.config-changed(); }
+                                SpinBox {
+                                    value: root.launch-max-mem;
+                                    minimum: 0;
+                                    maximum: 65536;
+                                    step-size: 512;
+                                    edited(val) => {
+                                        root.launch-max-mem = val;
+                                        root.config-changed();
                                     }
                                 }
+                            }
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "启动前检查资源"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    Switch {
-                                        checked: root.launch-recheck;
-                                        toggled => { root.launch-recheck = self.checked; root.config-changed(); }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "版本独立模式";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
+                                }
+
+                                Switch {
+                                    checked: root.launch-game-independent;
+                                    toggled => {
+                                        root.launch-game-independent = self.checked;
+                                        root.config-changed();
+                                    }
+                                }
+                            }
+
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "启动前检查资源";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
+                                }
+
+                                Switch {
+                                    checked: root.launch-recheck;
+                                    toggled => {
+                                        root.launch-recheck = self.checked;
+                                        root.config-changed();
                                     }
                                 }
                             }
                         }
+                    }
 
-                        GroupBox {
-                            title: "JVM 参数";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "JVM 参数";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                Text { text: "额外 JVM 参数"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.launch-jvm-args;
-                                    placeholder-text: "附加到 Class Path 前面";
-                                    edited(val) => { root.launch-jvm-args = val; root.config-changed(); }
+                            Text {
+                                text: "额外 JVM 参数";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.launch-jvm-args;
+                                placeholder-text: "附加到 Class Path 前面";
+                                edited(val) => {
+                                    root.launch-jvm-args = val;
+                                    root.config-changed();
                                 }
                             }
                         }
+                    }
 
-                        GroupBox {
-                            title: "游戏参数";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "游戏参数";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                Text { text: "额外游戏参数"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.launch-game-args;
-                                    placeholder-text: "附加到参数末尾";
-                                    edited(val) => { root.launch-game-args = val; root.config-changed(); }
+                            Text {
+                                text: "额外游戏参数";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.launch-game-args;
+                                placeholder-text: "附加到参数末尾";
+                                edited(val) => {
+                                    root.launch-game-args = val;
+                                    root.config-changed();
                                 }
+                            }
 
-                                Text { text: "窗口标题"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.launch-window-title;
-                                    placeholder-text: "留空使用默认标题";
-                                    edited(val) => { root.launch-window-title = val; root.config-changed(); }
+                            Text {
+                                text: "窗口标题";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.launch-window-title;
+                                placeholder-text: "留空使用默认标题";
+                                edited(val) => {
+                                    root.launch-window-title = val;
+                                    root.config-changed();
                                 }
                             }
                         }
+                    }
 
-                        GroupBox {
-                            title: "包装器";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "包装器";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                Text { text: "包装器路径"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.launch-wrapper-path;
-                                    placeholder-text: "Java 前的执行文件路径";
-                                    edited(val) => { root.launch-wrapper-path = val; root.config-changed(); }
+                            Text {
+                                text: "包装器路径";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.launch-wrapper-path;
+                                placeholder-text: "Java 前的执行文件路径";
+                                edited(val) => {
+                                    root.launch-wrapper-path = val;
+                                    root.config-changed();
                                 }
+                            }
 
-                                Text { text: "包装器参数"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.launch-wrapper-args;
-                                    placeholder-text: "附加到包装器后";
-                                    edited(val) => { root.launch-wrapper-args = val; root.config-changed(); }
+                            Text {
+                                text: "包装器参数";
+                                font-size: 0.92rem;
+                                color: Palette.foreground;
+                            }
+
+                            LineEdit {
+                                text: root.launch-wrapper-args;
+                                placeholder-text: "附加到包装器后";
+                                edited(val) => {
+                                    root.launch-wrapper-args = val;
+                                    root.config-changed();
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            Tab {
-                title: "外观";
+        Tab {
+            title: "外观";
 
-                ScrollView {
-                    VerticalLayout {
-                        spacing: StyleMetrics.layout-spacing;
-                        padding: StyleMetrics.layout-padding;
+            ScrollView {
+                VerticalLayout {
+                    spacing: StyleMetrics.layout-spacing;
+                    padding: StyleMetrics.layout-padding;
 
-                        GroupBox {
-                            title: "界面";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
+                    GroupBox {
+                        title: "界面";
+                        VerticalLayout {
+                            spacing: StyleMetrics.layout-spacing;
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "语言"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    ComboBox {
-                                        model: root.appearance-language-model;
-                                        current-index: root.appearance-language-index;
-                                        selected(val) => {
-                                            root.appearance-language-index = self.current-index;
-                                            root.config-changed();
-                                        }
-                                    }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "语言";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
                                 }
 
-                                HorizontalLayout {
-                                    spacing: 8px;
-                                    Text { text: "启动时检查更新"; font-size: 11px; vertical-alignment: center; color: Palette.foreground; }
-                                    Switch {
-                                        checked: root.appearance-auto-check-update;
-                                        toggled => { root.appearance-auto-check-update = self.checked; root.config-changed(); }
+                                ComboBox {
+                                    model: root.appearance-language-model;
+                                    current-index: root.appearance-language-index;
+                                    selected(val) => {
+                                        root.appearance-language-index = self.current-index;
+                                        root.config-changed();
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
 
-            Tab {
-                title: "认证";
-
-                ScrollView {
-                    VerticalLayout {
-                        spacing: StyleMetrics.layout-spacing;
-                        padding: StyleMetrics.layout-padding;
-
-                        GroupBox {
-                            title: "微软登录";
-                            VerticalLayout {
-                                spacing: StyleMetrics.layout-spacing;
-
-                                Text { text: "Azure AD Client ID"; font-size: 11px; color: Palette.foreground; }
-                                LineEdit {
-                                    text: root.auth-microsoft-client-id;
-                                    placeholder-text: "设备码登录需要 Client ID";
-                                    edited(val) => { root.auth-microsoft-client-id = val; root.config-changed(); }
+                            HorizontalLayout {
+                                spacing: 8px;
+                                Text {
+                                    text: "启动时检查更新";
+                                    font-size: 0.92rem;
+                                    vertical-alignment: center;
+                                    color: Palette.foreground;
                                 }
 
-                                Button {
-                                    text: "微软账户登录";
-                                    primary: true;
-                                    clicked => { root.open-microsoft-login(); }
+                                Switch {
+                                    checked: root.appearance-auto-check-update;
+                                    toggled => {
+                                        root.appearance-auto-check-update = self.checked;
+                                        root.config-changed();
+                                    }
                                 }
                             }
                         }

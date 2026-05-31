@@ -1,0 +1,22 @@
+import { Palette, StyleMetrics } from "std-widgets.slint";
+import { IconButton } from "iconbutton.slint";
+
+export component PageContainer inherits Rectangle {
+    in property <length> content-padding: StyleMetrics.layout-padding;
+    in property <length> content-padding-left: root.content-padding;
+    in property <length> content-padding-right: root.content-padding;
+    in property <length> content-padding-top: root.content-padding;
+    in property <length> content-padding-bottom: root.content-padding;
+    in property <length> content-spacing: StyleMetrics.layout-spacing;
+
+    background: Palette.background;
+
+    VerticalLayout {
+        padding-left: root.content-padding-left;
+        padding-right: root.content-padding-right;
+        padding-top: root.content-padding-top;
+        padding-bottom: root.content-padding-bottom;
+        spacing: root.content-spacing;
+        @children
+    }
+}

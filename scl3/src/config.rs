@@ -3,6 +3,7 @@ use clapfig::Config;
 use keyring::Entry;
 use scl_core::auth::structs::AuthMethod;
 use scl_core::download::DownloadSource;
+use scl_core::password::Password;
 use serde::{Deserialize, Serialize};
 
 const KEYRING_SERVICE: &str = "scl3";
@@ -101,7 +102,7 @@ impl DownloadConfig {
     }
 }
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct LaunchConfig {
     /// 默认最大内存，单位 MB，0 表示自动分配
     #[config(default = 0)]
@@ -134,6 +135,9 @@ pub struct LaunchConfig {
     /// 包装器执行文件参数，将会附加到包装器执行文件后
     #[config(default = "")]
     pub wrapper_args: String,
+
+    #[config(default = "")]
+    pub selected_instance: String,
 }
 
 #[derive(Config, Serialize, Deserialize, Debug)]
@@ -149,15 +153,29 @@ pub struct AppearanceConfig {
 
 #[derive(Config, Serialize, Deserialize, Debug)]
 pub struct AuthConfig {
-    /// 微软登录的 Azure AD 应用 Client ID
     #[config(default = "")]
     pub microsoft_client_id: String,
 
-    /// 已保存的账户列表
+    #[config(default = 0)]
+    pub selected_account_index: usize,
+
     pub accounts: Option<Vec<AccountConfig>>,
 }
 
 impl AuthConfig {
+    pub fn current_account(&self) -> Option<&AccountConfig> {
+        self.accounts.as_ref().and_then(|accounts| {
+            accounts.get(
+                self.selected_account_index
+                    .min(accounts.len().saturating_sub(1)),
+            )
+        })
+    }
+
+    pub fn account_count(&self) -> usize {
+        self.accounts.as_ref().map_or(0, |a| a.len())
+    }
+
     pub fn upsert_account(&mut self, account: AccountConfig) {
         let accounts = self.accounts.get_or_insert_with(Vec::new);
         if let Some(existing) = accounts
@@ -195,6 +213,14 @@ pub enum AccountConfig {
 }
 
 impl AccountConfig {
+    pub fn player_name(&self) -> &str {
+        match self {
+            Self::Offline { player_name, .. } => player_name,
+            Self::Microsoft { player_name, .. } => player_name,
+            Self::AuthlibInjector { player_name, .. } => player_name,
+        }
+    }
+
     fn same_identity(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Offline { uuid: a, .. }, Self::Offline { uuid: b, .. }) => a == b,
@@ -241,6 +267,57 @@ impl AccountConfig {
         if let Some(key) = self.keyring_key() {
             if let Ok(entry) = Entry::new(KEYRING_SERVICE, &key) {
                 let _ = entry.delete_credential();
+            }
+        }
+    }
+
+    pub fn to_auth_method(&self) -> Result<AuthMethod> {
+        match self {
+            Self::Offline { player_name, uuid } => Ok(AuthMethod::Offline {
+                player_name: player_name.clone(),
+                uuid: uuid.clone(),
+            }),
+            Self::Microsoft {
+                player_name,
+                uuid,
+                xuid,
+            } => {
+                let refresh_token = self.load_secret().ok_or_else(|| {
+                    anyhow::anyhow!("无法从 keyring 读取 Microsoft refresh_token，请重新登录")
+                })?;
+                Ok(AuthMethod::Microsoft {
+                    access_token: Password::default(),
+                    refresh_token: refresh_token.into(),
+                    uuid: uuid.clone(),
+                    xuid: xuid.clone(),
+                    player_name: player_name.clone(),
+                    head_skin: Vec::new(),
+                    hat_skin: Vec::new(),
+                })
+            }
+            Self::AuthlibInjector {
+                player_name,
+                uuid,
+                api_location,
+                server_name,
+                server_homepage,
+                server_meta,
+                username: _,
+            } => {
+                let _password = self.load_secret().ok_or_else(|| {
+                    anyhow::anyhow!("无法从 keyring 读取 Authlib 密码，请重新登录")
+                })?;
+                Ok(AuthMethod::AuthlibInjector {
+                    api_location: api_location.clone(),
+                    server_name: server_name.clone(),
+                    server_homepage: server_homepage.clone(),
+                    server_meta: server_meta.clone(),
+                    access_token: Password::default(),
+                    uuid: uuid.clone(),
+                    player_name: player_name.clone(),
+                    head_skin: Vec::new(),
+                    hat_skin: Vec::new(),
+                })
             }
         }
     }

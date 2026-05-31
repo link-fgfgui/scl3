@@ -1,0 +1,39 @@
+import { IconButton } from "base/iconbutton.slint";
+import { Palette, StyleMetrics } from "std-widgets.slint";
+export component Header inherits Rectangle {
+    in property <string> title;
+    in property <image> back-icon: @image-url("../assets/icon-settings.svg");
+    callback go-back();
+
+    background: Palette.background;
+
+    VerticalLayout {
+        padding: 0px;
+        spacing: 0px;
+
+        HorizontalLayout {
+            height: 36px;
+            padding-left: StyleMetrics.layout-padding;
+            padding-right: StyleMetrics.layout-padding;
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            IconButton {
+                width: 28px;
+                height: 28px;
+                icon-size: 28px;
+                icon: root.back-icon;
+                clicked => root.go-back();
+            }
+
+            Text {
+                font-size: 1.17rem;
+                font-weight: 700;
+                vertical-alignment: center;
+                text: root.title;
+            }
+        }
+
+        @children
+    }
+}

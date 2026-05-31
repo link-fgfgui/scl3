@@ -1,0 +1,128 @@
+import { ComboBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+struct FileItem {
+    filename: string,
+}
+
+component FileListItem inherits Rectangle {
+    in property <string> filename;
+    height: 45px;
+    background: transparent;
+
+    HorizontalLayout {
+        padding-left: StyleMetrics.layout-padding;
+        padding-right: StyleMetrics.layout-padding;
+        spacing: StyleMetrics.layout-spacing;
+        alignment: start;
+
+        Rectangle {
+            width: 22px;
+            height: 22px;
+            background: Palette.foreground;
+            border-radius: 4px;
+            y: (parent.height - self.height) / 2;
+
+            Text {
+                text: "🧩";
+                font-size: 1rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.filename;
+            font-size: 1.17rem;
+            color: Palette.foreground;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component ChooseJarPage inherits PageContainer {
+    width: 360px;
+    height: 540px;
+
+    private property <[FileItem]> mock-files: [
+        { filename: "emi-1.1.24+1.21.1+neoforge.jar" },
+        { filename: "emi-1.1.24+1.21.1+fabric.jar" },
+        { filename: "emi-1.1.24+1.20.1+forge.jar" },
+        { filename: "emi-1.1.24+1.20.1+fabric.jar" },
+        { filename: "emi-1.1.24+1.19.2+forge.jar" },
+        { filename: "emi-1.1.24+1.19.2+fabric.jar" },
+        { filename: "emi-1.1.23+1.20.1+forge.jar" },
+        { filename: "emi-1.1.23+1.20.1+fabric.jar" }
+    ];
+
+    HorizontalLayout {
+        spacing: StyleMetrics.layout-spacing;
+        alignment: start;
+
+        Rectangle {
+            width: 46px;
+            height: 46px;
+            background: Palette.control-background;
+            border-radius: 6px;
+
+            Text {
+                text: "EMI";
+                color: Palette.control-foreground;
+                font-size: 1.25rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: StyleMetrics.layout-spacing;
+
+            Text {
+                text: "EMI";
+                font-size: 1.17rem;
+                color: Palette.foreground;
+            }
+            Text {
+                text: "A featureful and accessible item and reci...";
+                font-size: 1rem;
+                color: Palette.alternate-foreground;
+            }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: StyleMetrics.layout-spacing;
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: StyleMetrics.layout-spacing;
+            Text { text: "加载器"; font-size: 0.92rem; color: Palette.alternate-foreground; }
+            ComboBox {
+                model: ["全部", "Fabric", "Forge", "NeoForge", "Quilt"];
+                current-index: 0;
+            }
+        }
+
+        VerticalLayout {
+            horizontal-stretch: 1;
+            spacing: StyleMetrics.layout-spacing;
+            Text { text: "MC 版本"; font-size: 0.92rem; color: Palette.alternate-foreground; }
+            ComboBox {
+                model: ["全部", "1.21.1", "1.20.1", "1.19.2", "1.18.2"];
+                current-index: 0;
+            }
+        }
+    }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            for item in root.mock-files : FileListItem {
+                filename: item.filename;
+            }
+        }
+    }
+}

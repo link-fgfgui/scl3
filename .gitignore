@@ -47,3 +47,6 @@ rust-project.json
 assets/
 lib-src/
 .trae/
+
+scl3.toml
+*.md

@@ -2,10 +2,12 @@ import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
 import { Launcher } from "./pages/launcher.slint";
 import { Settings } from "./pages/settings.slint";
 import { MicrosoftLogin } from "./pages/microsoft-login.slint";
+import { Login } from "./pages/login.slint";
 import { ProgressBar } from "./download-bar.slint";
+import { Header } from "header.slint";
 export component AppWindow inherits Window {
-    width: 300px;
-    height: 450px;
+    preferred-width: 300px;
+    preferred-height: 450px;
     in-out property <int> page-index: 0;
     in-out property <string> download-task-name: "正在安装 Minecraft 1.16.5";
     in-out property <float> download-progress: 0.314;
@@ -26,13 +28,28 @@ export component AppWindow inherits Window {
     in-out property <string> launch-wrapper-args: "";
     in-out property <int> appearance-language-index: 0;
     in-out property <bool> appearance-auto-check-update: true;
-    in-out property <string> auth-microsoft-client-id: "";
     in-out property <string> auth-microsoft-verification-uri: "";
     in-out property <string> auth-microsoft-user-code: "";
     in-out property <string> auth-microsoft-message: "";
-    in-out property <string> auth-microsoft-status: "请输入 Azure AD Client ID，然后获取认证码";
+    in-out property <string> auth-microsoft-status: "正在获取认证码...";
     in-out property <bool> auth-microsoft-login-in-progress: false;
     in-out property <bool> auth-microsoft-can-complete-login: false;
+    in-out property <string> auth-microsoft-device-code: "";
+    in-out property <int> current-account-index: 0;
+    in-out property <int> account-count: 0;
+    in-out property <string> player-name: "Player";
+    in-out property <int> login-method-type: 0;
+    in-out property <image> avatar-image: @image-url("../assets/icon-player-avatar.svg");
+    in-out property <[string]> instance-model: [];
+    in-out property <int> selected-instance-index: -1;
+
+    in-out property <int> login-selected-method: 0;
+    in-out property <string> login-ext-auth-server: "";
+    in-out property <string> login-ext-email: "";
+    in-out property <string> login-ext-password: "";
+    in-out property <string> login-offline-username: "Player";
+    in-out property <string> login-status: "";
+    in-out property <bool> login-in-progress: false;
 
     callback launch-game();
     callback manage-instances();
@@ -44,18 +61,47 @@ export component AppWindow inherits Window {
     callback open-microsoft-login();
     callback start-microsoft-login();
     callback complete-microsoft-login();
+    callback open-login();
+    callback select-microsoft-login();
+    callback start-external-login(server: string, email: string, password: string);
+    callback start-offline-login(username: string);
+    callback account-switched(index: int);
 
     VerticalLayout {
-
+        if page-index != 0:
+        Header {
+            go-back => { root.go-back(); }
+        }
 
         Rectangle {
             min-height: 400px;
             if page-index == 0: Launcher {
+                current-account-index <=> root.current-account-index;
+                account-count <=> root.account-count;
+                player-name <=> root.player-name;
+                login-method-type <=> root.login-method-type;
+                avatar-image <=> root.avatar-image;
+                instance-model <=> root.instance-model;
+                selected-instance-index <=> root.selected-instance-index;
                 launch-game => { root.launch-game(); }
                 manage-instances => { root.manage-instances(); }
                 open-download => { root.open-download(); }
                 open-settings => { root.open-settings(); }
                 instance-selected(value) => { root.instance-selected(value); }
+                account-switched(index) => { root.account-switched(index); }
+                open-login => { root.open-login(); }
+            }
+            if page-index == 2: Login {
+                selected-method <=> root.login-selected-method;
+                ext-auth-server <=> root.login-ext-auth-server;
+                ext-email <=> root.login-ext-email;
+                ext-password <=> root.login-ext-password;
+                offline-username <=> root.login-offline-username;
+                login-status <=> root.login-status;
+                login-in-progress <=> root.login-in-progress;
+                open-microsoft-login => { root.open-microsoft-login(); }
+                start-external-login(server, email, password) => { root.start-external-login(server, email, password); }
+                start-offline-login(username) => { root.start-offline-login(username); }
             }
             if page-index == 3: Settings {
                 game-minecraft-path <=> root.game-minecraft-path;
@@ -74,21 +120,18 @@ export component AppWindow inherits Window {
                 launch-wrapper-args <=> root.launch-wrapper-args;
                 appearance-language-index <=> root.appearance-language-index;
                 appearance-auto-check-update <=> root.appearance-auto-check-update;
-                auth-microsoft-client-id <=> root.auth-microsoft-client-id;
-                go-back => { root.go-back(); }
+
                 config-changed => { root.config-changed(); }
                 open-microsoft-login => { root.open-microsoft-login(); }
             }
             if page-index == 4: MicrosoftLogin {
-                client-id <=> root.auth-microsoft-client-id;
                 verification-uri <=> root.auth-microsoft-verification-uri;
                 user-code <=> root.auth-microsoft-user-code;
                 message <=> root.auth-microsoft-message;
                 status-text <=> root.auth-microsoft-status;
                 login-in-progress <=> root.auth-microsoft-login-in-progress;
                 can-complete-login <=> root.auth-microsoft-can-complete-login;
-                go-back => { root.go-back(); }
-                config-changed => { root.config-changed(); }
+
                 start-microsoft-login => { root.start-microsoft-login(); }
                 complete-microsoft-login => { root.complete-microsoft-login(); }
             }

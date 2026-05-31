@@ -1,0 +1,112 @@
+import { ComboBox, LineEdit, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+import { PageContainer } from "../base/page-container.slint";
+
+struct ModItem {
+    title: string,
+    description: string,
+}
+
+component ModListItem inherits Rectangle {
+    in property <string> title: "Mod Title";
+    in property <string> description: "Mod Description";
+
+    background: @linear-gradient(0deg, Palette.alternate-background, Palette.background);
+    border-radius: 4px;
+    height: 75px;
+
+    HorizontalLayout {
+        padding: StyleMetrics.layout-padding;
+        spacing: StyleMetrics.layout-spacing;
+        alignment: start;
+
+        Rectangle {
+            width: 58px;
+            height: 58px;
+            background: Palette.control-background;
+            border-radius: 6px;
+
+            Text {
+                text: "ICON";
+                color: Palette.control-foreground;
+                font-size: 0.83rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: StyleMetrics.layout-spacing;
+
+            Text {
+                text: root.title;
+                font-size: 1.17rem;
+                color: Palette.foreground;
+                overflow: elide;
+            }
+            Text {
+                text: root.description;
+                font-size: 1rem;
+                color: Palette.alternate-foreground;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+export component SearchPage inherits PageContainer {
+    width: 380px;
+    height: 500px;
+
+    private property <[ModItem]> mock-data: [
+        { title: "(Feudal Lords) Coinage", description: "The Coinage for the Feudal Lords server" },
+        { title: "[ WOB ] Economy", description: "Economy mod for the World Of BEF server." },
+        { title: "[AdvancedChatBox] Simply Updated", description: "An update of the original AdvancedChatBox..." },
+        { title: "[AdvancedChatCore] Simply Updated", description: "An update of the original AdvancedChat..." },
+        { title: "[AdvancedChatHUD] Simply Updated", description: "An update of the original AdvancedChat..." },
+        { title: "[AdvancedChatLog] Simply Updated", description: "An update of the original AdvancedChatL..." },
+        { title: "[AI slop] Fabric Seasons: Delight Com...", description: "This mod adds crop compatibility for Far..." }
+    ];
+
+    HorizontalLayout {
+        spacing: StyleMetrics.layout-spacing;
+        height: 36px;
+
+        ComboBox {
+            width: 75px;
+            model: ["MR", "CF"];
+            current-index: 0;
+        }
+
+        Rectangle {
+            width: 36px;
+            background: Palette.accent-background;
+            border-radius: 4px;
+
+            Text {
+                text: "🔍";
+                color: Palette.accent-foreground;
+                font-size: 1.33rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        LineEdit {
+            placeholder-text: "搜索...";
+            font-size: 1.17rem;
+        }
+    }
+
+    ScrollView {
+        VerticalLayout {
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            for item in root.mock-data : ModListItem {
+                title: item.title;
+                description: item.description;
+            }
+        }
+    }
+}

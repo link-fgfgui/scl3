@@ -1,0 +1,163 @@
+import { ComboBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+
+// 1. 普通版本行组件（包含选中状态和缩进功能）
+component VersionItem inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected: false;
+    in property <bool> is-sub: false; // 是否为子项（用于产生缩进）
+    callback clicked;
+
+    height: 38px;
+    background: transparent;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+        
+        HorizontalLayout {
+            padding-left: root.is-sub ? 42px : StyleMetrics.layout-padding;
+            padding-right: StyleMetrics.layout-padding;
+            alignment: space-between;
+
+            // 左侧内容：图标 + 文字
+            HorizontalLayout {
+                spacing: StyleMetrics.layout-spacing;
+                alignment: start;
+                
+                // 模拟图片中的卷轴/Logo图标（此处用 Emoji 快速替代）
+                Text {
+                    text: "📜"; 
+                    font-size: 1.25rem;
+                    vertical-alignment: center;
+                }
+
+                Text {
+                    text: root.text;
+                    font-size: 1.17rem;
+                    color: Palette.foreground;
+                    vertical-alignment: center;
+                }
+            }
+
+            // 右侧内容：选中状态的小黑点
+            if (root.selected) : Rectangle {
+                width: 10px;
+                height: 10px;
+                background: Palette.foreground;
+                border-radius: 5px;
+                y: (parent.height - self.height) / 2; // 垂直居中
+            }
+        }
+    }
+}
+
+// 2. 可折叠组标题组件
+component ExpandableHeader inherits Rectangle {
+    in property <string> text;
+    in property <bool> expanded: false;
+    callback clicked;
+
+    height: 38px;
+    background: transparent;
+
+    TouchArea {
+        clicked => { root.clicked(); }
+
+        HorizontalLayout {
+            padding-left: StyleMetrics.layout-padding;
+            padding-right: StyleMetrics.layout-padding;
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            // 状态箭头（根据展开状态切换 ⌃ / ⌄）
+            Text {
+                text: root.expanded ? "⌃" : "⌄";
+                font-size: 1.17rem;
+                color: Palette.alternate-foreground;
+                vertical-alignment: center;
+                width: 14px;
+            }
+
+            Text {
+                text: root.text;
+                font-size: 1.17rem;
+                color: Palette.foreground;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+// 3. 主界面布局
+export component GameVersionChoosePage inherits Rectangle {
+    width: 340px;
+    height: 450px;
+    background: Palette.background;
+
+    // 状态控制变量：用于管理选中项和折叠逻辑
+    private property <int> selected-index: 0;   // 0:不安装, 1:最新正式, 2:最新快照, 3:正式子项0.19.2
+    private property <bool> releases-expanded: true;   // 默认展开所有正式版本
+    private property <bool> snapshots-expanded: false; // 默认折叠所有快照版本
+
+    ScrollView {
+        VerticalLayout {
+            padding: StyleMetrics.layout-padding;
+            spacing: StyleMetrics.layout-spacing;
+            alignment: start;
+
+            // ① 不安装
+            VersionItem {
+                text: "不安装";
+                selected: root.selected-index == 0;
+                clicked => { root.selected-index = 0; }
+            }
+
+            // ② 最新正式版
+            VersionItem {
+                text: "最新正式版: 0.19.2";
+                selected: root.selected-index == 1;
+                clicked => { root.selected-index = 1; }
+            }
+
+            // ③ 最新快照版
+            VersionItem {
+                text: "最新快照版: 0.19.1";
+                selected: root.selected-index == 2;
+                clicked => { root.selected-index = 2; }
+            }
+
+            // ④ 所有正式版本（带折叠功能）
+            ExpandableHeader {
+                text: "所有正式版本";
+                expanded: root.releases-expanded;
+                clicked => { root.releases-expanded = !root.releases-expanded; }
+            }
+
+            // 正式版本子列表（受状态变量控制）
+            if (root.releases-expanded) : VerticalLayout {
+                VersionItem {
+                    text: "0.19.2";
+                    is-sub: true;
+                    selected: root.selected-index == 3;
+                    clicked => { root.selected-index = 3; }
+                }
+            }
+
+            // ⑤ 所有快照版本（带折叠功能）
+            ExpandableHeader {
+                text: "所有快照版本";
+                expanded: root.snapshots-expanded;
+                clicked => { root.snapshots-expanded = !root.snapshots-expanded; }
+            }
+
+            // 快照版本子列表（受状态变量控制）
+            if (root.snapshots-expanded) : VerticalLayout {
+                VersionItem {
+                    text: "0.19.1";
+                    is-sub: true;
+                    selected: root.selected-index == 4;
+                    clicked => { root.selected-index = 4; }
+                }
+            }
+        }
+    }
+}
