@@ -5,21 +5,98 @@ use crate::ui_sync::{save_config, save_ui_config, set_microsoft_error, update_ac
 use scl_core::auth::microsoft::MicrosoftOAuth;
 use scl_core::auth::structs::AuthMethod;
 use scl_core::client::{Client, ClientConfig};
-use scl_core::java::JavaRuntime;
+use scl_core::download::{
+    FabricDownloadExt, ForgeDownloadExt, GameDownload, NeoForgeDownloadExt,
+    OptifineDownloadExt, QuiltMCDownloadExt, VanillaDownloadExt,
+};
+use scl_core::java::{search_for_java, JavaRuntime};
 use scl_core::version::Version;
-use scl_core::version::structs::VersionInfo;
+// Slint 生成的 crate::ui 模块含同名 VersionInfo，使用别名避免冲突
+use scl_core::version::structs::VersionInfo as LocalVersionInfo;
 use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{debug, error, info, warn};
 
-// 确保引入 ComponentHandle 接口，它是 as_weak() 能被调用的关键
-use slint::ComponentHandle;
+use slint::{ComponentHandle, Model};
 use crate::ui::AppWindow;
 
-// ==================== 全局页面路由栈实现 ====================
 static ROUTER: OnceLock<Mutex<Vec<i32>>> = OnceLock::new();
 
 fn get_router() -> &'static Mutex<Vec<i32>> {
     ROUTER.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+struct RawVersionGroup {
+    title: String,
+    items: Vec<(String, String)>,
+    expanded: bool,
+}
+
+impl RawVersionGroup {
+    fn to_version_group(&self) -> crate::ui::VersionGroup {
+        crate::ui::VersionGroup {
+            title: self.title.clone().into(),
+            items: slint::ModelRc::new(slint::VecModel::from(
+                self.items
+                    .iter()
+                    .map(|(id, text)| crate::ui::VersionItem {
+                        id: id.clone().into(),
+                        text: text.clone().into(),
+                    })
+                    .collect::<Vec<_>>(),
+            )),
+            expanded: self.expanded,
+        }
+    }
+}
+
+fn raw_groups_to_model(groups: Vec<RawVersionGroup>) -> slint::ModelRc<crate::ui::VersionGroup> {
+    slint::ModelRc::new(slint::VecModel::from(
+        groups.iter().map(|g| g.to_version_group()).collect::<Vec<_>>(),
+    ))
+}
+
+struct DownloaderParams {
+    source: scl_core::download::DownloadSource,
+    minecraft_dir: String,
+    java_path: String,
+    verify_data: bool,
+    parallel: usize,
+    game_independent: bool,
+}
+
+impl DownloaderParams {
+    fn from_config(config: &Arc<Mutex<crate::config::SclConfig>>) -> Self {
+        let cfg = config.lock().unwrap();
+        Self {
+            source: cfg.download.resolved_source(),
+            minecraft_dir: cfg.game.resolved_minecraft_path(),
+            java_path: cfg.game.resolved_java_path(),
+            verify_data: cfg.download.verify_data,
+            parallel: cfg.download.parallel_amount,
+            game_independent: cfg.launch.game_independent,
+        }
+    }
+
+    fn build_downloader(&self) -> scl_core::download::Downloader<()> {
+        let mut d = self.build_with_java()
+            .with_parallel_amount(self.parallel)
+            .with_game_independent(self.game_independent);
+        if self.verify_data {
+            d = d.with_verify_data();
+        }
+        d
+    }
+
+    fn build_minimal(&self) -> scl_core::download::Downloader<()> {
+        scl_core::download::Downloader::<()>::default()
+            .with_source(self.source.clone())
+            .with_minecraft_path(&self.minecraft_dir)
+    }
+
+    fn build_with_java(&self) -> scl_core::download::Downloader<()> {
+        self.build_minimal()
+            .with_java(self.java_path.clone())
+    }
 }
 
 pub fn navigate_to(to: i32, ui: &AppWindow) {
@@ -27,8 +104,8 @@ pub fn navigate_to(to: i32, ui: &AppWindow) {
     if current == to {
         return;
     }
+    // 使用局部作用域及时释放锁，防止 UI 渲染时死锁
     {
-        // 使用局部作用域及时释放锁，防止 UI 渲染时死锁
         let mut stack = get_router().lock().unwrap();
         stack.push(current);
     }
@@ -40,14 +117,13 @@ pub fn navigate_back(ui: &AppWindow) {
         let mut stack = get_router().lock().unwrap();
         stack.pop()
     };
+    // 如果栈空了，默认退回到主界面，不至于让界面卡住没反应
     if let Some(back) = target_page {
         ui.set_page_index(back);
     } else {
-        // 如果栈空了，默认退回到主界面，不至于让界面卡住没反应
         ui.set_page_index(Pages::Launcher as i32);
     }
 }
-// ============================================================
 
 pub fn register_launch_callback(
     ui: &AppWindow,
@@ -63,9 +139,8 @@ pub fn register_launch_callback(
         move || {
             debug!("[回调] 启动游戏");
             let ui = ui_weak.unwrap();
-            
-            // 启动过渡页也可以加入路由追踪
-            navigate_to(10, &ui);
+
+            ui.set_progress_visible(true);
             ui.set_download_task_name("正在启动 Minecraft...".into());
             ui.set_download_progress(0.0);
 
@@ -73,6 +148,7 @@ pub fn register_launch_callback(
             if selected_idx < 0 || (selected_idx as usize) >= versions.len() {
                 let _ = ui_weak.upgrade_in_event_loop(|ui| {
                     ui.set_download_task_name("错误：未选择有效的游戏版本".into());
+                    ui.set_progress_visible(false);
                 });
                 return;
             }
@@ -85,6 +161,7 @@ pub fn register_launch_callback(
             let Some(account) = account_config else {
                 let _ = ui_weak.upgrade_in_event_loop(|ui| {
                     ui.set_download_task_name("错误：未选择账户".into());
+                    ui.set_progress_visible(false);
                 });
                 return;
             };
@@ -95,6 +172,7 @@ pub fn register_launch_callback(
                     error!("构建 AuthMethod 失败: {}", e);
                     let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                         ui.set_download_task_name(format!("错误：{}", e).into());
+                        ui.set_progress_visible(false);
                     });
                     return;
                 }
@@ -107,13 +185,7 @@ pub fn register_launch_callback(
                 let minecraft_dir = cfg.game.resolved_minecraft_path();
                 let java_path = cfg.game.resolved_java_path();
                 let launch_cfg = cfg.launch.clone();
-                (
-                    client_id,
-                    version_name,
-                    minecraft_dir,
-                    java_path,
-                    launch_cfg,
-                )
+                (client_id, version_name, minecraft_dir, java_path, launch_cfg)
             };
 
             let ui_weak = ui_weak.clone();
@@ -158,6 +230,7 @@ pub fn register_launch_callback(
                     error!("刷新令牌失败: {}", e);
                     let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                         ui.set_download_task_name(format!("刷新令牌失败: {}", e).into());
+                        ui.set_progress_visible(false);
                     });
                     return;
                 }
@@ -173,7 +246,7 @@ pub fn register_launch_callback(
                 }
 
                 let versions_dir = std::path::Path::new(&minecraft_dir).join("versions");
-                let mut version_info = VersionInfo {
+                let mut version_info = LocalVersionInfo {
                     version_base: versions_dir.to_string_lossy().to_string(),
                     version: version_name.clone(),
                     ..Default::default()
@@ -187,6 +260,7 @@ pub fn register_launch_callback(
                     error!("加载版本信息失败: {}", e);
                     let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                         ui.set_download_task_name(format!("加载版本信息失败: {}", e).into());
+                        ui.set_progress_visible(false);
                     });
                     return;
                 }
@@ -221,6 +295,7 @@ pub fn register_launch_callback(
                         error!("检测 Java 失败: {}", e);
                         let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_download_task_name(format!("检测 Java 失败: {}", e).into());
+                            ui.set_progress_visible(false);
                         });
                         return;
                     }
@@ -249,6 +324,7 @@ pub fn register_launch_callback(
                         error!("组装启动参数失败: {}", e);
                         let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_download_task_name(format!("组装启动参数失败: {}", e).into());
+                            ui.set_progress_visible(false);
                         });
                         return;
                     }
@@ -264,12 +340,14 @@ pub fn register_launch_callback(
                         info!("游戏已启动，PID: {}", pid);
                         let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_download_task_name(format!("游戏已启动 (PID: {})", pid).into());
+                            ui.set_progress_visible(false);
                         });
                     }
                     Err(e) => {
                         error!("启动游戏失败: {}", e);
                         let _ = ui_weak.upgrade_in_event_loop(move |ui| {
                             ui.set_download_task_name(format!("启动游戏失败: {}", e).into());
+                            ui.set_progress_visible(false);
                         });
                     }
                 }
@@ -280,8 +358,11 @@ pub fn register_launch_callback(
 
 pub fn register_navigation_callbacks(ui: &AppWindow) {
     ui.on_manage_instances({
+        let ui_weak = ui.as_weak();
         move || {
             debug!("[回调] 管理实例");
+            let ui = ui_weak.unwrap();
+            navigate_to(Pages::DirManage as i32, &ui);
         }
     });
 
@@ -290,9 +371,7 @@ pub fn register_navigation_callbacks(ui: &AppWindow) {
         move || {
             debug!("[回调] 打开下载页面");
             let ui = ui_weak.unwrap();
-            navigate_to(10, &ui); // 👉 使用路由栈管理
-            ui.set_download_task_name("正在下载...".into());
-            ui.set_download_progress(0.0);
+            navigate_to(Pages::GameDownload as i32, &ui);
         }
     });
 
@@ -301,7 +380,7 @@ pub fn register_navigation_callbacks(ui: &AppWindow) {
         move || {
             debug!("[回调] 打开设置");
             let ui = ui_weak.unwrap();
-            navigate_to(Pages::Settings as i32, &ui); // 👉 使用路由栈管理
+            navigate_to(Pages::Settings as i32, &ui);
         }
     });
 
@@ -309,7 +388,7 @@ pub fn register_navigation_callbacks(ui: &AppWindow) {
         let ui_weak = ui.as_weak();
         move || {
             let ui = ui_weak.unwrap();
-            navigate_to(Pages::Login as i32, &ui); // 👉 使用路由栈管理
+            navigate_to(Pages::Login as i32, &ui);
         }
     });
 
@@ -317,7 +396,7 @@ pub fn register_navigation_callbacks(ui: &AppWindow) {
         let ui_weak = ui.as_weak();
         move || {
             let ui = ui_weak.unwrap();
-            navigate_back(&ui); // 👉 抛弃原来硬编码的跳转，完美调用历史后退功能！
+            navigate_back(&ui);
         }
     });
 
@@ -325,7 +404,7 @@ pub fn register_navigation_callbacks(ui: &AppWindow) {
         let ui_weak = ui.as_weak();
         move || {
             let ui = ui_weak.unwrap();
-            navigate_to(Pages::MicrosoftLogin as i32, &ui); // 👉 使用路由栈管理
+            navigate_to(Pages::MicrosoftLogin as i32, &ui);
         }
     });
 }
@@ -395,7 +474,7 @@ fn register_external_login_callback(
             let email_for_save = email.clone();
             let password_for_save = password.clone();
             rt_handle.spawn(async move {
-                // 👉 直接 await，抛弃 smol 和 spawn_blocking
+                // 直接 await，抛弃 smol 和 spawn_blocking
                 let result = scl_core::auth::authlib::start_auth(
                     scl_core::progress::NR,
                     &server,
@@ -405,9 +484,9 @@ fn register_external_login_callback(
                 )
                 .await;
 
-                // 因为去掉了 spawn_blocking，少了一层 Result 嵌套
                 let result: Result<Vec<AuthMethod>, String> = match result {
                     Ok(methods) => Ok(methods),
+                // 因为去掉了 spawn_blocking，少了一层 Result 嵌套
                     Err(e) => Err(e.to_string()),
                 };
                 let _ = ui_weak.upgrade_in_event_loop(move |ui| {
@@ -447,7 +526,8 @@ fn register_external_login_callback(
                                             .as_ref()
                                             .map_or(0, |a| a.len().saturating_sub(1));
                                         cfg.auth.selected_account_index = new_idx;
-                                        if let Err(e) = save_config(&cfg) {
+                                        let cfg_clone = cfg.clone();
+                                        if let Err(e) = save_config(&cfg_clone) {
                                             ui.set_login_status(
                                                 format!("保存配置失败: {e}").into(),
                                             );
@@ -475,7 +555,6 @@ fn register_external_login_callback(
                                     std::thread::spawn(move || {
                                         std::thread::sleep(std::time::Duration::from_secs(1));
                                         let _ = ui_weak.upgrade_in_event_loop(|ui| {
-                                            // 登录成功属于自动重定向，直接设置主页
                                             ui.set_page_index(Pages::Launcher as i32);
                                         });
                                     });
@@ -523,7 +602,8 @@ fn register_offline_login_callback(ui: &AppWindow, config: Arc<Mutex<crate::conf
                     .as_ref()
                     .map_or(0, |a| a.len().saturating_sub(1));
                 cfg.auth.selected_account_index = new_idx;
-                if let Err(e) = save_config(&cfg) {
+                let cfg_clone = cfg.clone();
+                if let Err(e) = save_config(&cfg_clone) {
                     let ui = ui_weak.unwrap();
                     ui.set_login_status(format!("保存配置失败: {e}").into());
                     return;
@@ -591,11 +671,10 @@ fn register_microsoft_login_callback(
 
             let ui_weak = ui_weak.clone();
             rt_handle.spawn(async move {
-                // 👉 直接在当前的 Tokio 运行时中等待结果
+                // 直接在当前的 Tokio 运行时中等待结果
                 let oauth = MicrosoftOAuth::new(client_id);
                 let result = oauth.get_devicecode().await.map_err(|e| e.to_string());
-                
-                // 去掉了 Result 嵌套解包，直接匹配 result
+
                 let _ = ui_weak.upgrade_in_event_loop(move |ui| match result {
                     Ok(code) => {
                         let message = if code.message.is_empty() {
@@ -668,7 +747,7 @@ fn register_complete_microsoft_login_callback(
             let config = config.clone();
             let delay_handle = rt_handle.clone();
             rt_handle.spawn(async move {
-                // 👉 利用 async 块替代 spawn_blocking + smol
+                // 利用 async 块替代 spawn_blocking + smol
                 let result = async {
                     let oauth = MicrosoftOAuth::new(client_id);
                     let token = oauth
@@ -688,8 +767,8 @@ fn register_complete_microsoft_login_callback(
                     Ok::<_, String>(method)
                 }.await;
 
-                // 去掉多余的 result match 解包，因为直接返回的就是 Result<AuthMethod, String>
                 let _ = ui_weak.upgrade_in_event_loop(move |ui| match result {
+                // 去掉多余的 result match 解包，直接匹配 result
                     Ok(method) => match AccountConfig::save_account(&method, None, None) {
                         Ok(account) => {
                             save_avatar_from_auth_method(&method);
@@ -703,7 +782,8 @@ fn register_complete_microsoft_login_callback(
                                     .as_ref()
                                     .map_or(0, |a| a.len().saturating_sub(1));
                                 cfg.auth.selected_account_index = new_idx;
-                                if let Err(e) = save_config(&cfg) {
+                                let cfg_clone = cfg.clone();
+                                if let Err(e) = save_config(&cfg_clone) {
                                     set_microsoft_error(&ui, format!("保存配置失败: {e}"));
                                     return;
                                 }
@@ -765,7 +845,8 @@ pub fn register_account_callback(
             let ui = ui_weak.unwrap();
             let account_count = ui.get_account_count();
             if index == account_count {
-                if let Err(e) = save_config(&config.lock().unwrap()) {
+                let cfg = config.lock().unwrap().clone();
+                if let Err(e) = save_config(&cfg) {
                     error!("保存配置失败: {}", e);
                 }
                 return;
@@ -779,7 +860,7 @@ pub fn register_account_callback(
                 let cfg = config.lock().unwrap();
                 update_account_ui(&ui, cfg.auth.current_account(), &default_avatar);
             }
-            let cfg = config.lock().unwrap();
+            let cfg = config.lock().unwrap().clone();
             if let Err(e) = save_config(&cfg) {
                 error!("保存配置失败: {}", e);
             }
@@ -793,6 +874,767 @@ pub fn register_instance_callback(ui: &AppWindow, config: Arc<Mutex<crate::confi
         move |value: slint::SharedString| {
             debug!("[回调] 选中实例: {}", value);
             config.lock().unwrap().launch.selected_instance = value.to_string();
+        }
+    });
+}
+
+pub fn register_download_callbacks(
+    ui: &AppWindow,
+    config: Arc<Mutex<crate::config::SclConfig>>,
+    rt_handle: tokio::runtime::Handle,
+) {
+    ui.on_component_clicked({
+        let ui_weak = ui.as_weak();
+        let config = config.clone();
+        let rt_handle = rt_handle.clone();
+        move |component_type: slint::SharedString| {
+            let ct = component_type.to_string();
+            let ui = ui_weak.unwrap();
+
+            match ct.as_str() {
+                "vanilla" => {
+                    ui.set_vc_page_title("选择 Minecraft 版本".into());
+                    ui.set_vc_show_skip_option(false);
+                    ui.set_vc_component_type("vanilla".into());
+                    ui.set_vc_selected_id(ui.get_dl_vanilla_selected());
+                    navigate_to(Pages::VersionChoose as i32, &ui);
+
+                    let params = DownloaderParams::from_config(&config);
+                    let ui_weak = ui_weak.clone();
+                    rt_handle.spawn(async move {
+                        let downloader = params.build_minimal();
+                        let manifest = match downloader.get_avaliable_vanilla_versions().await {
+                            Ok(m) => m,
+                            Err(e) => {
+                                error!("获取原版版本列表失败: {}", e);
+                                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                    ui.set_progress_visible(true);
+                                    ui.set_download_task_name(
+                                        format!("获取版本列表失败: {}", e).into(),
+                                    );
+                                });
+                                return;
+                            }
+                        };
+
+                        let mut releases = Vec::new();
+                        let mut snapshots = Vec::new();
+                        for v in &manifest.versions {
+                            if v.version_type == "release" {
+                                releases.push((v.id.clone(), v.id.clone()));
+                            } else if v.version_type == "snapshot" {
+                                snapshots.push((v.id.clone(), v.id.clone()));
+                            }
+                        }
+
+                        let groups = vec![
+                            RawVersionGroup {
+                                title: "正式版 (Release)".into(),
+                                items: releases,
+                                expanded: true,
+                            },
+                            RawVersionGroup {
+                                title: "快照版 (Snapshot)".into(),
+                                items: snapshots,
+                                expanded: false,
+                            },
+                        ];
+
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_vc_groups(raw_groups_to_model(groups));
+                        });
+                    });
+                }
+                "forge" | "neoforge" | "fabric" | "quilt" | "optifine" => {
+                    let vanilla_version = ui.get_dl_vanilla_selected().to_string();
+                    if vanilla_version.is_empty() {
+                        ui.set_progress_visible(true);
+                        ui.set_download_task_name("请先选择 Minecraft 版本".into());
+                        return;
+                    }
+
+                    let title = match ct.as_str() {
+                        "forge" => "选择 Forge 版本",
+                        "neoforge" => "选择 NeoForge 版本",
+                        "fabric" => "选择 Fabric 版本",
+                        "quilt" => "选择 QuiltMC 版本",
+                        "optifine" => "选择 Optifine 版本",
+                        _ => "选择版本",
+                    };
+
+                    ui.set_vc_page_title(title.into());
+                    ui.set_vc_show_skip_option(true);
+                    ui.set_vc_component_type(ct.clone().into());
+
+                    let selected = match ct.as_str() {
+                        "forge" => ui.get_dl_forge_selected(),
+                        "neoforge" => ui.get_dl_neoforge_selected(),
+                        "fabric" => ui.get_dl_fabric_selected(),
+                        "quilt" => ui.get_dl_quilt_selected(),
+                        "optifine" => ui.get_dl_optifine_selected(),
+                        _ => Default::default(),
+                    };
+                    ui.set_vc_selected_id(selected);
+                    navigate_to(Pages::VersionChoose as i32, &ui);
+
+                    let params = DownloaderParams::from_config(&config);
+                    let ui_weak = ui_weak.clone();
+                    let ct = ct.clone();
+                    rt_handle.spawn(async move {
+                        let downloader = params.build_with_java();
+                        let groups = fetch_loader_groups(&downloader, &ct, &vanilla_version).await;
+
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            if ui.get_vc_component_type() != slint::SharedString::from(ct.as_str()) {
+                                return;
+                            }
+                            ui.set_vc_groups(raw_groups_to_model(groups));
+                        });
+                    });
+                }
+                _ => {
+                    warn!("未知的组件类型: {}", ct);
+                }
+            }
+        }
+    });
+
+    ui.on_toggle_group({
+        let ui_weak = ui.as_weak();
+        move |index: i32| {
+            let ui = ui_weak.unwrap();
+            let groups = ui.get_vc_groups();
+            let mut new_groups: Vec<crate::ui::VersionGroup> = Vec::new();
+            for i in 0..groups.row_count() {
+                let mut g = groups.row_data(i).unwrap_or_default();
+                if i == index as usize {
+                    g.expanded = !g.expanded;
+                }
+                new_groups.push(g);
+            }
+            ui.set_vc_groups(slint::ModelRc::new(slint::VecModel::from(new_groups)));
+        }
+    });
+
+    ui.on_version_choose_selected({
+        let ui_weak = ui.as_weak();
+        move |id: slint::SharedString| {
+            let id_str = id.to_string();
+            let ui = ui_weak.unwrap();
+            let component_type = ui.get_vc_component_type().to_string();
+            match component_type.as_str() {
+                "vanilla" => {
+                    ui.set_dl_vanilla_selected(id_str.clone().into());
+                    if ui.get_dl_version_name().is_empty() {
+                        ui.set_dl_version_name(id_str.into());
+                    }
+                }
+                "forge" => ui.set_dl_forge_selected(id_str.into()),
+                "neoforge" => ui.set_dl_neoforge_selected(id_str.into()),
+                "fabric" => ui.set_dl_fabric_selected(id_str.into()),
+                "quilt" => ui.set_dl_quilt_selected(id_str.into()),
+                "optifine" => ui.set_dl_optifine_selected(id_str.into()),
+                _ => {}
+            }
+            navigate_back(&ui);
+        }
+    });
+
+    ui.on_install_game({
+        let ui_weak = ui.as_weak();
+        let config = config.clone();
+        let rt_handle = rt_handle.clone();
+        move || {
+            let ui = ui_weak.unwrap();
+            let version_name = ui.get_dl_version_name().to_string();
+            if version_name.is_empty() {
+                ui.set_progress_visible(true);
+                ui.set_download_task_name("请输入版本名称".into());
+                return;
+            }
+
+            let vanilla_id = ui.get_dl_vanilla_selected().to_string();
+            if vanilla_id.is_empty() {
+                ui.set_progress_visible(true);
+                ui.set_download_task_name("请选择 Minecraft 版本".into());
+                return;
+            }
+
+            let forge_version = ui.get_dl_forge_selected().to_string();
+            let fabric_version = ui.get_dl_fabric_selected().to_string();
+            let quilt_version = ui.get_dl_quilt_selected().to_string();
+            let neoforge_version = ui.get_dl_neoforge_selected().to_string();
+            let optifine_version = ui.get_dl_optifine_selected().to_string();
+
+            let params = DownloaderParams::from_config(&config);
+
+            ui.set_progress_visible(true);
+            ui.set_download_task_name(format!("正在安装 {}...", version_name).into());
+            ui.set_download_progress(0.0);
+
+            let ui_weak = ui_weak.clone();
+            rt_handle.spawn(async move {
+                let downloader = params.build_downloader();
+
+                let manifest = match downloader.get_avaliable_vanilla_versions().await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name(
+                                format!("获取版本清单失败: {}", e).into(),
+                            );
+                            ui.set_progress_visible(false);
+                        });
+                        return;
+                    }
+                };
+
+                let vanilla_info = match manifest.versions.iter().find(|v| v.id == vanilla_id) {
+                    Some(v) => v.clone(),
+                    None => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name("找不到指定的原版版本".into());
+                            ui.set_progress_visible(false);
+                        });
+                        return;
+                    }
+                };
+
+                let version_name_display = version_name.clone();
+                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_download_task_name(
+                        format!("正在下载 {}...", version_name_display).into(),
+                    );
+                });
+
+                match downloader
+                    .download_game(
+                        &version_name,
+                        vanilla_info,
+                        &fabric_version,
+                        &quilt_version,
+                        &forge_version,
+                        &neoforge_version,
+                        &optifine_version,
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name(
+                                format!("{} 安装完成！", version_name).into(),
+                            );
+                            ui.set_download_progress(1.0);
+                            ui.set_progress_visible(false);
+                        });
+                    }
+                    Err(e) => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name(format!("安装失败: {}", e).into());
+                            ui.set_progress_visible(false);
+                        });
+                    }
+                }
+            });
+        }
+    });
+}
+
+async fn fetch_loader_groups(
+    downloader: &scl_core::download::Downloader<()>,
+    component_type: &str,
+    vanilla_version: &str,
+) -> Vec<RawVersionGroup> {
+    match component_type {
+        "forge" => match ForgeDownloadExt::get_avaliable_installers(downloader, vanilla_version).await {
+            Ok(data) => {
+                let mut groups = Vec::new();
+                if let Some(rec) = &data.recommended {
+                    groups.push(RawVersionGroup {
+                        title: "推荐版本".into(),
+                        items: vec![(rec.version.clone(), rec.version.clone())],
+                        expanded: true,
+                    });
+                }
+                let all_items: Vec<(String, String)> = data
+                    .all_versions
+                    .iter()
+                    .map(|v| (v.version.clone(), v.version.clone()))
+                    .collect();
+                if !all_items.is_empty() {
+                    groups.push(RawVersionGroup {
+                        title: "所有版本".into(),
+                        items: all_items,
+                        expanded: true,
+                    });
+                }
+                if groups.is_empty() {
+                    groups.push(RawVersionGroup {
+                        title: "无可用版本".into(),
+                        items: vec![],
+                        expanded: true,
+                    });
+                }
+                groups
+            }
+            Err(_) => vec![RawVersionGroup {
+                title: "获取失败".into(),
+                items: vec![],
+                expanded: true,
+            }],
+        },
+        "neoforge" => match NeoForgeDownloadExt::get_avaliable_installers(downloader, vanilla_version).await {
+            Ok(data) => {
+                let mut groups = Vec::new();
+                if let Some(latest) = &data.latest {
+                    groups.push(RawVersionGroup {
+                        title: "最新版本".into(),
+                        items: vec![(latest.version.clone(), latest.version.clone())],
+                        expanded: true,
+                    });
+                }
+                let all_items: Vec<(String, String)> = data
+                    .all_versions
+                    .iter()
+                    .map(|v| (v.version.clone(), v.version.clone()))
+                    .collect();
+                if !all_items.is_empty() {
+                    groups.push(RawVersionGroup {
+                        title: "所有版本".into(),
+                        items: all_items,
+                        expanded: true,
+                    });
+                }
+                if groups.is_empty() {
+                    groups.push(RawVersionGroup {
+                        title: "无可用版本".into(),
+                        items: vec![],
+                        expanded: true,
+                    });
+                }
+                groups
+            }
+            Err(_) => vec![RawVersionGroup {
+                title: "获取失败".into(),
+                items: vec![],
+                expanded: true,
+            }],
+        },
+        "fabric" => match FabricDownloadExt::get_avaliable_loaders(downloader, vanilla_version).await {
+            Ok(loaders) => {
+                let items: Vec<(String, String)> = loaders
+                    .iter()
+                    .map(|l| (l.loader.version.clone(), l.loader.version.clone()))
+                    .collect();
+                if items.is_empty() {
+                    vec![RawVersionGroup {
+                        title: "无可用版本".into(),
+                        items: vec![],
+                        expanded: true,
+                    }]
+                } else {
+                    vec![RawVersionGroup {
+                        title: "加载器版本".into(),
+                        items,
+                        expanded: true,
+                    }]
+                }
+            }
+            Err(_) => vec![RawVersionGroup {
+                title: "获取失败".into(),
+                items: vec![],
+                expanded: true,
+            }],
+        },
+        "quilt" => match QuiltMCDownloadExt::get_avaliable_loaders(downloader, vanilla_version).await {
+            Ok(loaders) => {
+                let items: Vec<(String, String)> = loaders
+                    .iter()
+                    .map(|l| (l.loader.version.clone(), l.loader.version.clone()))
+                    .collect();
+                if items.is_empty() {
+                    vec![RawVersionGroup {
+                        title: "无可用版本".into(),
+                        items: vec![],
+                        expanded: true,
+                    }]
+                } else {
+                    vec![RawVersionGroup {
+                        title: "加载器版本".into(),
+                        items,
+                        expanded: true,
+                    }]
+                }
+            }
+            Err(_) => vec![RawVersionGroup {
+                title: "获取失败".into(),
+                items: vec![],
+                expanded: true,
+            }],
+        },
+        "optifine" => match OptifineDownloadExt::get_avaliable_installers(downloader, vanilla_version).await {
+            Ok(versions) => {
+                let items: Vec<(String, String)> = versions
+                    .iter()
+                    .map(|v| {
+                        let label = format!("{} {}", v.version_type, v.patch);
+                        (label.clone(), label)
+                    })
+                    .collect();
+                if items.is_empty() {
+                    vec![RawVersionGroup {
+                        title: "无可用版本".into(),
+                        items: vec![],
+                        expanded: true,
+                    }]
+                } else {
+                    vec![RawVersionGroup {
+                        title: "Optifine 版本".into(),
+                        items,
+                        expanded: true,
+                    }]
+                }
+            }
+            Err(_) => vec![RawVersionGroup {
+                title: "获取失败".into(),
+                items: vec![],
+                expanded: true,
+            }],
+        },
+        _ => vec![],
+    }
+}
+
+pub fn register_mod_callbacks(
+    ui: &AppWindow,
+    config: Arc<Mutex<crate::config::SclConfig>>,
+    rt_handle: tokio::runtime::Handle,
+) {
+    ui.on_search_mods({
+        let ui_weak = ui.as_weak();
+        let rt_handle = rt_handle.clone();
+        move || {
+            let ui = ui_weak.unwrap();
+            let query = ui.get_mod_search_query().to_string();
+            let source_index = ui.get_mod_search_source_index();
+
+            ui.set_mod_search_is_searching(true);
+
+            let ui_weak = ui_weak.clone();
+            rt_handle.spawn(async move {
+                let results = if source_index == 0 {
+                    match scl_core::download::modrinth::search_mods(
+                        scl_core::download::modrinth::SearchParams {
+                            search_filter: query,
+                            index: 1,
+                            page_size: 20,
+                        },
+                    ).await {
+                        Ok(hits) => hits.iter().map(|m| crate::ui::ModItem {
+                            project_id: m.project_id.clone().into(),
+                            title: m.title.clone().into(),
+                            description: m.description.clone().into(),
+                            icon_url: m.icon_url.clone().into(),
+                        }).collect(),
+                        Err(e) => {
+                            error!("Modrinth 搜索失败: {}", e);
+                            let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_progress_visible(true);
+                                ui.set_download_task_name(format!("Modrinth 搜索失败: {}", e).into());
+                            });
+                            vec![]
+                        }
+                    }
+                } else {
+                    match scl_core::download::curseforge::search_mods(
+                        scl_core::download::curseforge::SearchParams {
+                            search_filter: query,
+                            ..Default::default()
+                        },
+                    ).await {
+                        Ok(hits) => hits.iter().map(|m| crate::ui::ModItem {
+                            project_id: m.id.to_string().into(),
+                            title: m.name.clone().into(),
+                            description: m.summary.clone().into(),
+                            icon_url: m.logo.as_ref().map(|l| l.thumbnail_url.clone()).unwrap_or_default().into(),
+                        }).collect(),
+                        Err(e) => {
+                            error!("CurseForge 搜索失败: {}", e);
+                            let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_progress_visible(true);
+                                ui.set_download_task_name(format!("CurseForge 搜索失败: {}", e).into());
+                            });
+                            vec![]
+                        }
+                    }
+                };
+
+                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_mod_search_results(slint::ModelRc::new(slint::VecModel::from(results)));
+                    ui.set_mod_search_is_searching(false);
+                });
+            });
+        }
+    });
+
+    ui.on_mod_selected({
+        let ui_weak = ui.as_weak();
+        let rt_handle = rt_handle.clone();
+        move |project_id: slint::SharedString| {
+            let ui = ui_weak.unwrap();
+            let pid = project_id.to_string();
+            let source_index = ui.get_mod_search_source_index();
+
+            let ui_weak = ui_weak.clone();
+            rt_handle.spawn(async move {
+                let (title, description, files) = if source_index == 0 {
+                    match scl_core::download::modrinth::get_mod_files(&pid).await {
+                        Ok(versions) => {
+                            let info = scl_core::download::modrinth::get_mod_info(&pid).await.ok();
+                            let title = info.as_ref().map(|i| i.title.clone()).unwrap_or_default();
+                            let desc = info.as_ref().map(|i| i.description.clone()).unwrap_or_default();
+                            let files: Vec<crate::ui::ModFileItem> = versions.iter().flat_map(|v| {
+                                v.files.iter().map(|f| crate::ui::ModFileItem {
+                                    filename: f.filename.clone().into(),
+                                    game_versions: v.game_versions.join(", ").into(),
+                                    loaders: v.loaders.join(", ").into(),
+                                    download_url: f.url.clone().into(),
+                                    primary: f.primary,
+                                })
+                            }).collect();
+                            (title, desc, files)
+                        }
+                        Err(e) => {
+                            error!("获取 Modrinth 模组文件失败: {}", e);
+                            let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_progress_visible(true);
+                                ui.set_download_task_name(format!("获取模组文件失败: {}", e).into());
+                            });
+                            (String::new(), String::new(), vec![])
+                        }
+                    }
+                } else {
+                    if let Ok(mod_id) = pid.parse::<u64>() {
+                        match scl_core::download::curseforge::get_mod_files(mod_id).await {
+                            Ok(cf_files) => {
+                                let info = scl_core::download::curseforge::get_mod_info(mod_id).await.ok();
+                                let title = info.as_ref().map(|i| i.name.clone()).unwrap_or_default();
+                                let desc = info.as_ref().map(|i| i.summary.clone()).unwrap_or_default();
+                                let files: Vec<crate::ui::ModFileItem> = cf_files.iter().map(|f| {
+                                    crate::ui::ModFileItem {
+                                        filename: f.file_name.clone().into(),
+                                        game_versions: f.game_versions.join(", ").into(),
+                                        loaders: String::new().into(),
+                                        download_url: f.download_url.clone().into(),
+                                        primary: false,
+                                    }
+                                }).collect();
+                                (title, desc, files)
+                            }
+                            Err(e) => {
+                                error!("获取 CurseForge 模组文件失败: {}", e);
+                                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                                    ui.set_progress_visible(true);
+                                    ui.set_download_task_name(format!("获取模组文件失败: {}", e).into());
+                                });
+                                (String::new(), String::new(), vec![])
+                            }
+                        }
+                    } else {
+                        (String::new(), String::new(), vec![])
+                    }
+                };
+
+                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_mod_detail_title(title.into());
+                    ui.set_mod_detail_description(description.into());
+                    ui.set_mod_detail_files(slint::ModelRc::new(slint::VecModel::from(files)));
+                    navigate_to(Pages::ModDetail as i32, &ui);
+                });
+            });
+        }
+    });
+
+    ui.on_mod_download_file({
+        let ui_weak = ui.as_weak();
+        let config = config.clone();
+        let rt_handle = rt_handle.clone();
+        move |index: i32| {
+            if index < 0 {
+                return;
+            }
+            let ui = ui_weak.unwrap();
+            let files = ui.get_mod_detail_files();
+            if (index as usize) >= files.row_count() {
+                return;
+            }
+            let file_item = files.row_data(index as usize).unwrap_or_default();
+            let url = file_item.download_url.to_string();
+            let filename = file_item.filename.to_string();
+            let minecraft_dir = config.lock().unwrap().game.resolved_minecraft_path();
+
+            let ui_weak = ui_weak.clone();
+            rt_handle.spawn(async move {
+                let mods_dir = std::path::Path::new(&minecraft_dir).join("mods");
+                let _ = std::fs::create_dir_all(&mods_dir);
+                let dest = mods_dir.join(&filename);
+                let filename_display = filename.clone();
+                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_progress_visible(true);
+                    ui.set_download_task_name(format!("正在下载 {}...", filename_display).into());
+                    ui.set_download_progress(0.0);
+                });
+
+                match scl_core::http::download(&[&url], dest.to_string_lossy().as_ref(), 0).await {
+                    Ok(()) => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name(format!("{} 下载完成", filename).into());
+                            ui.set_download_progress(1.0);
+                            ui.set_progress_visible(false);
+                        });
+                    }
+                    Err(e) => {
+                        let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_download_task_name(format!("下载失败: {}", e).into());
+                            ui.set_progress_visible(false);
+                        });
+                    }
+                }
+            });
+        }
+    });
+
+    ui.on_mod_filter_changed({
+        let ui_weak = ui.as_weak();
+        move || {
+            // TODO: 实现客户端文件过滤，按 loader 和 mc_version 筛选 mod-files
+            let _ = ui_weak.upgrade_in_event_loop(|_| {});
+        }
+    });
+}
+
+pub fn register_java_callbacks(
+    ui: &AppWindow,
+    config: Arc<Mutex<crate::config::SclConfig>>,
+    rt_handle: tokio::runtime::Handle,
+) {
+    ui.on_search_java({
+        let ui_weak = ui.as_weak();
+        let rt_handle = rt_handle.clone();
+        move || {
+            let ui = ui_weak.unwrap();
+            ui.set_java_is_searching(true);
+
+            let ui_weak = ui_weak.clone();
+            rt_handle.spawn(async move {
+                let java_paths = search_for_java().await;
+                let mut java_items = Vec::new();
+
+                for path in java_paths {
+                    if let Ok(runtime) = JavaRuntime::from_java_path(&path).await {
+                        java_items.push(crate::ui::JavaItem {
+                            path: runtime.path().into(),
+                            version: runtime.version().into(),
+                            main_version: runtime.main_version() as i32,
+                            is_64bit: runtime.is_64bit(),
+                        });
+                    }
+                }
+
+                let _ = ui_weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_java_list(slint::ModelRc::new(slint::VecModel::from(java_items)));
+                    ui.set_java_is_searching(false);
+                });
+            });
+        }
+    });
+
+    ui.on_java_selected({
+        let ui_weak = ui.as_weak();
+        let config = config.clone();
+        move |index: i32| {
+            if index < 0 {
+                return;
+            }
+            let ui = ui_weak.unwrap();
+            let java_list = ui.get_java_list();
+            if (index as usize) >= java_list.row_count() {
+                return;
+            }
+            let java_item = java_list.row_data(index as usize).unwrap_or_default();
+            let path = java_item.path.to_string();
+            {
+                let mut cfg = config.lock().unwrap();
+                cfg.game.java_path = Some(vec![path.clone()]);
+            }
+            ui.set_game_java_path(path.into());
+            let cfg = config.lock().unwrap().clone();
+            if let Err(e) = save_config(&cfg) {
+                error!("保存配置失败: {}", e);
+            }
+        }
+    });
+
+    ui.on_add_java_path({
+        let ui_weak = ui.as_weak();
+        move || {
+            // TODO: 弹出文件选择对话框，让用户手动选择 Java 可执行文件
+            let _ = ui_weak.upgrade_in_event_loop(|_| {});
+        }
+    });
+}
+
+pub fn register_dir_callbacks(
+    ui: &AppWindow,
+    config: Arc<Mutex<crate::config::SclConfig>>,
+) {
+    ui.on_add_dir({
+        let ui_weak = ui.as_weak();
+        move || {
+            // TODO: 弹出目录选择对话框，让用户手动选择 Minecraft 目录
+            let _ = ui_weak.upgrade_in_event_loop(|_| {});
+        }
+    });
+
+    ui.on_remove_dir({
+        let ui_weak = ui.as_weak();
+        move |index: i32| {
+            if index < 0 {
+                return;
+            }
+            let ui = ui_weak.unwrap();
+            let dir_list = ui.get_dir_list();
+            if (index as usize) >= dir_list.row_count() {
+                return;
+            }
+            // TODO: 从 dir-list 中移除选中项并更新 config
+            let _ = ui_weak.upgrade_in_event_loop(|_| {});
+        }
+    });
+
+    ui.on_dir_selected({
+        let ui_weak = ui.as_weak();
+        let config = config.clone();
+        move |index: i32| {
+            if index < 0 {
+                return;
+            }
+            let ui = ui_weak.unwrap();
+            let dir_list = ui.get_dir_list();
+            if (index as usize) >= dir_list.row_count() {
+                return;
+            }
+            let item = dir_list.row_data(index as usize).unwrap_or_default();
+            let path = item.path.to_string();
+            {
+                let mut cfg = config.lock().unwrap();
+                cfg.game.minecraft_path = Some(vec![path.clone()]);
+            }
+            ui.set_game_minecraft_path(path.into());
+            let cfg = config.lock().unwrap().clone();
+            if let Err(e) = save_config(&cfg) {
+                error!("保存配置失败: {}", e);
+            }
         }
     });
 }

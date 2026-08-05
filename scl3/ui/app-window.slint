@@ -3,14 +3,22 @@ import { Launcher } from "./pages/launcher.slint";
 import { Settings } from "./pages/settings.slint";
 import { MicrosoftLogin } from "./pages/microsoft-login.slint";
 import { Login } from "./pages/login.slint";
+import { GameDownloadPage } from "./pages/game-download.slint";
+import { GameVersionChoosePage, VersionGroup, VersionItem } from "./pages/game-version-choose.slint";
+import { SearchPage, ModItem } from "./pages/mod-search.slint";
+import { ChooseJarPage, ModFileItem } from "./pages/mod-choosejar.slint";
+import { JavaChoosePage, JavaItem } from "./pages/java-choose.slint";
+import { GameFolderManagerPage, DirItem } from "./pages/dir-choose.slint";
 import { ProgressBar } from "./download-bar.slint";
 import { Header } from "header.slint";
+
 export component AppWindow inherits Window {
-    preferred-width: 300px;
-    preferred-height: 450px;
+    preferred-width: 380px;
+    preferred-height: 540px;
     in-out property <int> page-index: 0;
-    in-out property <string> download-task-name: "正在安装 Minecraft 1.16.5";
-    in-out property <float> download-progress: 0.314;
+    in-out property <string> download-task-name: "";
+    in-out property <float> download-progress: 0.0;
+    in-out property <bool> progress-visible: false;
 
     in-out property <string> game-minecraft-path: "";
     in-out property <string> game-java-path: "";
@@ -51,6 +59,40 @@ export component AppWindow inherits Window {
     in-out property <string> login-status: "";
     in-out property <bool> login-in-progress: false;
 
+    in-out property <string> dl-version-name: "";
+    in-out property <string> dl-vanilla-selected: "";
+    in-out property <string> dl-forge-selected: "";
+    in-out property <string> dl-neoforge-selected: "";
+    in-out property <string> dl-fabric-selected: "";
+    in-out property <string> dl-quilt-selected: "";
+    in-out property <string> dl-optifine-selected: "";
+
+    in-out property <string> vc-page-title: "选择版本";
+    in-out property <bool> vc-show-skip-option: false;
+    in-out property <string> vc-component-type: "";
+    in-out property <[VersionGroup]> vc-groups: [];
+    in-out property <string> vc-selected-id: "";
+
+    in-out property <string> mod-search-query: "";
+    in-out property <int> mod-search-source-index: 0;
+    in-out property <[ModItem]> mod-search-results: [];
+    in-out property <bool> mod-search-is-searching: false;
+
+    in-out property <string> mod-detail-title: "";
+    in-out property <string> mod-detail-description: "";
+    in-out property <[ModFileItem]> mod-detail-files: [];
+    in-out property <int> mod-detail-loader-filter-index: 0;
+    in-out property <int> mod-detail-mc-version-filter-index: 0;
+    in-out property <[string]> mod-detail-loader-filter-model: [];
+    in-out property <[string]> mod-detail-mc-version-filter-model: [];
+
+    in-out property <[JavaItem]> java-list: [];
+    in-out property <int> java-selected-index: -1;
+    in-out property <bool> java-is-searching: false;
+
+    in-out property <[DirItem]> dir-list: [];
+    in-out property <int> dir-selected-index: -1;
+
     callback launch-game();
     callback manage-instances();
     callback open-download();
@@ -67,6 +109,25 @@ export component AppWindow inherits Window {
     callback start-offline-login(username: string);
     callback account-switched(index: int);
 
+    callback install-game();
+    callback component-clicked(component-type: string);
+
+    callback version-choose-selected(id: string);
+    callback toggle-group(index: int);
+
+    callback search-mods();
+    callback mod-selected(project_id: string);
+    callback mod-download-file(index: int);
+    callback mod-filter-changed();
+
+    callback search-java();
+    callback java-selected(index: int);
+    callback add-java-path();
+
+    callback add-dir();
+    callback remove-dir(index: int);
+    callback dir-selected(index: int);
+
     VerticalLayout {
         if page-index != 0:
         Header {
@@ -74,7 +135,8 @@ export component AppWindow inherits Window {
         }
 
         Rectangle {
-            min-height: 400px;
+            vertical-stretch: 1;
+
             if page-index == 0: Launcher {
                 current-account-index <=> root.current-account-index;
                 account-count <=> root.account-count;
@@ -135,11 +197,66 @@ export component AppWindow inherits Window {
                 start-microsoft-login => { root.start-microsoft-login(); }
                 complete-microsoft-login => { root.complete-microsoft-login(); }
             }
+            if page-index == 5: GameDownloadPage {
+                version-name <=> root.dl-version-name;
+                vanilla-selected <=> root.dl-vanilla-selected;
+                forge-selected <=> root.dl-forge-selected;
+                neoforge-selected <=> root.dl-neoforge-selected;
+                fabric-selected <=> root.dl-fabric-selected;
+                quilt-selected <=> root.dl-quilt-selected;
+                optifine-selected <=> root.dl-optifine-selected;
+
+                install-game => { root.install-game(); }
+                component-clicked(ct) => { root.component-clicked(ct); }
+            }
+            if page-index == 6: GameVersionChoosePage {
+                page-title <=> root.vc-page-title;
+                show-skip-option <=> root.vc-show-skip-option;
+                groups <=> root.vc-groups;
+                selected-version-id <=> root.vc-selected-id;
+                version-selected(id) => { root.version-choose-selected(id); }
+                toggle-group(index) => { root.toggle-group(index); }
+            }
+            if page-index == 7: SearchPage {
+                search-query <=> root.mod-search-query;
+                search-source-index <=> root.mod-search-source-index;
+                mod-results <=> root.mod-search-results;
+                is-searching <=> root.mod-search-is-searching;
+                search-mods => { root.search-mods(); }
+                mod-selected(pid) => { root.mod-selected(pid); }
+            }
+            if page-index == 8: ChooseJarPage {
+                mod-title <=> root.mod-detail-title;
+                mod-description <=> root.mod-detail-description;
+                mod-files <=> root.mod-detail-files;
+                loader-filter-index <=> root.mod-detail-loader-filter-index;
+                mc-version-filter-index <=> root.mod-detail-mc-version-filter-index;
+                loader-filter-model <=> root.mod-detail-loader-filter-model;
+                mc-version-filter-model <=> root.mod-detail-mc-version-filter-model;
+                download-file(idx) => { root.mod-download-file(idx); }
+                filter-changed => { root.mod-filter-changed(); }
+            }
+            if page-index == 9: JavaChoosePage {
+                java-list <=> root.java-list;
+                selected-java-index <=> root.java-selected-index;
+                is-searching <=> root.java-is-searching;
+                search-java => { root.search-java(); }
+                java-selected(idx) => { root.java-selected(idx); }
+                add-java-path => { root.add-java-path(); }
+            }
+            if page-index == 11: GameFolderManagerPage {
+                dir-list <=> root.dir-list;
+                selected-dir-index <=> root.dir-selected-index;
+                add-dir => { root.add-dir(); }
+                remove-dir(idx) => { root.remove-dir(idx); }
+                dir-selected(idx) => { root.dir-selected(idx); }
+            }
         }
-        
-        if page-index != 10: ProgressBar {
+
+        if root.progress-visible: ProgressBar {
             task-name: download-task-name;
             progress: download-progress;
+            dismiss => { root.progress-visible = false; }
         }
     }
 }

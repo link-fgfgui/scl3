@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 const KEYRING_SERVICE: &str = "scl3";
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct SclConfig {
     #[config(nested)]
     pub game: GameConfig,
@@ -26,7 +26,7 @@ pub struct SclConfig {
     pub auth: AuthConfig,
 }
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct GameConfig {
     /// Minecraft 游戏主目录路径列表，留空则使用系统默认路径
     pub minecraft_path: Option<Vec<String>>,
@@ -77,7 +77,7 @@ fn default_java_path() -> String {
     }
 }
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct DownloadConfig {
     /// 下载源，可选 "Default"、"BMCLAPI" 或自定义镜像源 URL
     #[config(default = "Default")]
@@ -140,7 +140,7 @@ pub struct LaunchConfig {
     pub selected_instance: String,
 }
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct AppearanceConfig {
     /// 界面语言
     #[config(default = "zh-CN")]
@@ -151,7 +151,7 @@ pub struct AppearanceConfig {
     pub auto_check_update: bool,
 }
 
-#[derive(Config, Serialize, Deserialize, Debug)]
+#[derive(Config, Serialize, Deserialize, Debug, Clone)]
 pub struct AuthConfig {
     #[config(default = "")]
     pub microsoft_client_id: String,

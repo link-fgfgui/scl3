@@ -123,6 +123,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     callbacks::register_auth_callbacks(&ui, config.clone(), rt_handle.clone());
     callbacks::register_account_callback(&ui, config.clone(), default_avatar.clone());
     callbacks::register_instance_callback(&ui, config.clone());
+    callbacks::register_download_callbacks(&ui, config.clone(), rt_handle.clone());
+    callbacks::register_mod_callbacks(&ui, config.clone(), rt_handle.clone());
+    callbacks::register_java_callbacks(&ui, config.clone(), rt_handle.clone());
+    callbacks::register_dir_callbacks(&ui, config.clone());
 
     ui.run()?;
 
@@ -132,6 +136,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             config.lock().unwrap().launch.selected_instance = versions[idx as usize].name.clone();
         }
     }
-    save_config(&config.lock().unwrap())?;
+    let cfg_clone = config.lock().unwrap().clone();
+    save_config(&cfg_clone)?;
     Ok(())
 }

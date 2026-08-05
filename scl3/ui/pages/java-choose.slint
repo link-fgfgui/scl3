@@ -1,10 +1,18 @@
-import { Palette, StyleMetrics } from "std-widgets.slint";
+import { Palette, StyleMetrics, Button, ScrollView } from "std-widgets.slint";
 import { PageContainer } from "../base/page-container.slint";
+
+export struct JavaItem {
+    path: string,
+    version: string,
+    main-version: int,
+    is-64bit: bool,
+}
 
 component JavaListItem inherits Rectangle {
     in property <string> badge-text;
     in property <string> title;
     in property <string> subtitle;
+    in property <bool> is-64bit: false;
     in property <bool> is-action: false;
     in property <bool> default-active: false;
 
@@ -71,10 +79,31 @@ component JavaListItem inherits Rectangle {
             alignment: center;
             spacing: StyleMetrics.layout-spacing;
 
-            Text {
-                text: root.title;
-                font-size: 1.25rem;
-                color: Palette.foreground;
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                Text {
+                    text: root.title;
+                    font-size: 1.25rem;
+                    color: Palette.foreground;
+                }
+
+                if (!root.is-action && root.is-64bit) : Rectangle {
+                    background: Palette.accent-background;
+                    border-radius: 3px;
+                    width: 36px;
+                    height: 16px;
+                    y: (parent.height - self.height) / 2;
+
+                    Text {
+                        text: "64bit";
+                        color: Palette.accent-foreground;
+                        font-size: 0.75rem;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
             }
 
             if (!root.is-action && root.subtitle != "") : Text {
@@ -92,29 +121,44 @@ export component JavaChoosePage inherits PageContainer {
     content-padding-left: 0px;
     content-padding-right: 0px;
 
-    JavaListItem {
-        badge-text: "8+";
-        title: "PATH 环境变量里的 Java 8+";
-        subtitle: "java";
-        clicked => { }
-    }
+    in-out property <[JavaItem]> java-list: [];
+    in-out property <int> selected-java-index: -1;
+    in-out property <bool> is-searching: false;
 
-    JavaListItem {
-        badge-text: "16+";
-        title: "PATH 环境变量里的 Java 16+";
-        subtitle: "java";
-    }
+    callback search-java();
+    callback java-selected(index: int);
+    callback add-java-path();
 
-    Rectangle { height: 12px; }
+    ScrollView {
+        VerticalLayout {
+            spacing: 0px;
 
-    JavaListItem {
-        is-action: true;
-        title: "添加新的 Java 运行时";
-    }
+            for java-item[idx] in root.java-list : JavaListItem {
+                badge-text: java-item.main-version > 0 ? "" + java-item.main-version + "+" : "";
+                title: java-item.version;
+                subtitle: java-item.path;
+                is-64bit: java-item.is-64bit;
+                default-active: idx == root.selected-java-index;
+                clicked => {
+                    root.selected-java-index = idx;
+                    root.java-selected(idx);
+                }
+            }
 
-    JavaListItem {
-        is-action: true;
-        title: "尝试搜索可用 Java 运行时";
-        default-active: true;
+            Rectangle { height: 12px; }
+
+            JavaListItem {
+                is-action: true;
+                title: "添加新的 Java 运行时";
+                clicked => { root.add-java-path(); }
+            }
+
+            JavaListItem {
+                is-action: true;
+                title: root.is-searching ? "正在搜索..." : "尝试搜索可用 Java 运行时";
+                default-active: root.is-searching;
+                clicked => { root.search-java(); }
+            }
+        }
     }
 }

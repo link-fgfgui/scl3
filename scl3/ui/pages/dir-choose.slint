@@ -1,42 +1,103 @@
-import { Palette, StyleMetrics, Button } from "std-widgets.slint";
+import { Button, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
 import { PageContainer } from "../base/page-container.slint";
 
-component ListItem inherits Rectangle {
-    in property <string> icon;
-    in property <string> text;
-    in property <bool> show-indicator: false;
+export struct DirItem {
+    path: string,
+    is-default: bool,
+    is-current: bool,
+}
 
-    height: 40px;
+component DirListItem inherits Rectangle {
+    in property <string> dir-path;
+    in property <bool> is-default: false;
+    in property <bool> is-current: false;
+    in property <bool> is-selected: false;
+
+    callback clicked;
+    callback remove-clicked;
+
+    height: 52px;
+    background: root.is-selected || touch.has-hover ? Palette.alternate-background : transparent;
+
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
 
     HorizontalLayout {
+        padding-left: StyleMetrics.layout-padding;
+        padding-right: StyleMetrics.layout-padding;
         spacing: StyleMetrics.layout-spacing;
+        alignment: start;
 
-        VerticalLayout {
-            alignment: center;
-            Text {
-                text: root.icon;
-                font-size: 1.5rem;
-                color: Palette.foreground;
-            }
+        Text {
+            text: "📁";
+            font-size: 1.5rem;
+            vertical-alignment: center;
         }
 
         VerticalLayout {
             alignment: center;
             horizontal-stretch: 1;
+            spacing: 2px;
+
             Text {
-                text: root.text;
-                font-size: 1.33rem;
+                text: root.dir-path;
+                font-size: 1.17rem;
                 color: Palette.foreground;
+                overflow: elide;
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                if (root.is-current) : Rectangle {
+                    background: Palette.accent-background;
+                    border-radius: 3px;
+                    height: 16px;
+
+                    Text {
+                        text: "当前";
+                        color: Palette.accent-foreground;
+                        font-size: 0.75rem;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                if (root.is-default) : Rectangle {
+                    background: Palette.control-background;
+                    border-radius: 3px;
+                    height: 16px;
+
+                    Text {
+                        text: "官方";
+                        color: Palette.control-foreground;
+                        font-size: 0.75rem;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
 
-        if (root.show-indicator) : VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 10px;
-                height: 10px;
-                background: Palette.foreground;
-                border-radius: 5px;
+        Rectangle {
+            width: 28px;
+            height: 28px;
+            border-radius: 4px;
+            background: remove-touch.has-hover ? Palette.alternate-background : transparent;
+            y: (parent.height - self.height) / 2;
+
+            Text {
+                text: "✕";
+                color: Palette.alternate-foreground;
+                font-size: 1.17rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            remove-touch := TouchArea {
+                clicked => { root.remove-clicked(); }
             }
         }
     }
@@ -46,43 +107,57 @@ export component GameFolderManagerPage inherits PageContainer {
     width: 360px;
     height: 480px;
 
-    VerticalLayout {
-        spacing: StyleMetrics.layout-spacing;
+    in-out property <[DirItem]> dir-list: [];
+    in-out property <int> selected-dir-index: -1;
 
-        ListItem {
-            icon: "📁";
-            text: "当前游戏文件夹";
-            show-indicator: true;
-        }
+    callback add-dir();
+    callback remove-dir(index: int);
+    callback dir-selected(index: int);
 
-        ListItem {
-            icon: "📁";
-            text: "官方游戏文件夹";
-            show-indicator: false;
+    ScrollView {
+        VerticalLayout {
+            spacing: 0px;
+
+            for item[idx] in root.dir-list : DirListItem {
+                dir-path: item.path;
+                is-default: item.is-default;
+                is-current: item.is-current;
+                is-selected: idx == root.selected-dir-index;
+                clicked => {
+                    root.selected-dir-index = idx;
+                    root.dir-selected(idx);
+                }
+                remove-clicked => {
+                    root.remove-dir(idx);
+                }
+            }
         }
     }
 
-    Rectangle {}
-
-    TouchArea {
-        height: 40px;
+    Rectangle {
+        height: 44px;
 
         HorizontalLayout {
             spacing: StyleMetrics.layout-spacing;
+            alignment: start;
 
             VerticalLayout {
                 alignment: center;
+
                 Button {
                     height: 32px;
                     text: "＋";
                     max-width: 32px;
+                    clicked => { root.add-dir(); }
                 }
             }
 
             VerticalLayout {
                 alignment: center;
+
                 Button {
                     text: "添加新的文件夹";
+                    clicked => { root.add-dir(); }
                 }
             }
         }

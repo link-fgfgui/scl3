@@ -1,12 +1,15 @@
 import { ComboBox, LineEdit, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
 import { PageContainer } from "../base/page-container.slint";
 
-struct ModItem {
+export struct ModItem {
+    project_id: string,
     title: string,
     description: string,
+    icon_url: string,
 }
 
 component ModListItem inherits Rectangle {
+    in property <string> project_id: "";
     in property <string> title: "Mod Title";
     in property <string> description: "Mod Description";
 
@@ -26,9 +29,9 @@ component ModListItem inherits Rectangle {
             border-radius: 6px;
 
             Text {
-                text: "ICON";
+                text: "🧩";
                 color: Palette.control-foreground;
-                font-size: 0.83rem;
+                font-size: 1.5rem;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
@@ -52,30 +55,39 @@ component ModListItem inherits Rectangle {
             }
         }
     }
+
+    TouchArea {
+        clicked => {
+            root.mod-clicked(root.project_id);
+        }
+    }
+
+    callback mod-clicked(string);
 }
 
 export component SearchPage inherits PageContainer {
     width: 380px;
     height: 500px;
 
-    private property <[ModItem]> mock-data: [
-        { title: "(Feudal Lords) Coinage", description: "The Coinage for the Feudal Lords server" },
-        { title: "[ WOB ] Economy", description: "Economy mod for the World Of BEF server." },
-        { title: "[AdvancedChatBox] Simply Updated", description: "An update of the original AdvancedChatBox..." },
-        { title: "[AdvancedChatCore] Simply Updated", description: "An update of the original AdvancedChat..." },
-        { title: "[AdvancedChatHUD] Simply Updated", description: "An update of the original AdvancedChat..." },
-        { title: "[AdvancedChatLog] Simply Updated", description: "An update of the original AdvancedChatL..." },
-        { title: "[AI slop] Fabric Seasons: Delight Com...", description: "This mod adds crop compatibility for Far..." }
-    ];
+    in-out property <string> search-query: "";
+    in-out property <int> search-source-index: 0;
+    in-out property <[ModItem]> mod-results: [];
+    in-out property <bool> is-searching: false;
+
+    callback search-mods();
+    callback mod-selected(string);
 
     HorizontalLayout {
         spacing: StyleMetrics.layout-spacing;
         height: 36px;
 
         ComboBox {
-            width: 75px;
-            model: ["MR", "CF"];
-            current-index: 0;
+            width: 120px;
+            model: ["Modrinth", "CurseForge"];
+            current-index: root.search-source-index;
+            selected(val) => {
+                root.search-source-index = self.current-index;
+            }
         }
 
         Rectangle {
@@ -90,22 +102,54 @@ export component SearchPage inherits PageContainer {
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
+
+            TouchArea {
+                clicked => {
+                    root.search-mods();
+                }
+            }
         }
 
         LineEdit {
+            text: root.search-query;
             placeholder-text: "搜索...";
             font-size: 1.17rem;
+            edited(val) => {
+                root.search-query = val;
+                root.search-mods();
+            }
         }
     }
 
-    ScrollView {
+    if root.is-searching : Rectangle {
+        height: 48px;
+        background: transparent;
+
+        HorizontalLayout {
+            alignment: center;
+
+            Text {
+                text: "搜索中...";
+                font-size: 1.17rem;
+                color: Palette.alternate-foreground;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+
+    if !root.is-searching : ScrollView {
         VerticalLayout {
             spacing: StyleMetrics.layout-spacing;
             alignment: start;
 
-            for item in root.mock-data : ModListItem {
+            for item in root.mod-results : ModListItem {
+                project_id: item.project_id;
                 title: item.title;
                 description: item.description;
+                mod-clicked(pid) => {
+                    root.mod-selected(pid);
+                }
             }
         }
     }

@@ -1,24 +1,18 @@
 import { LineEdit, Palette, StyleMetrics } from "std-widgets.slint";
 import { PageContainer } from "../base/page-container.slint";
 
-struct ComponentData {
-    icon: string,
-    icon_color: color,
-    name: string,
-    status: string,
-}
-
 component ComponentRow inherits Rectangle {
     in property <string> icon;
     in property <color> icon_color;
     in property <string> name;
-    in property <string> status;
+    in property <string> selected-text: "";
+    callback clicked;
 
     height: 38px;
     background: transparent;
 
-    HorizontalLayout {
-        alignment: space-between;
+    TouchArea {
+        clicked => { root.clicked(); }
 
         HorizontalLayout {
             spacing: StyleMetrics.layout-spacing;
@@ -36,14 +30,24 @@ component ComponentRow inherits Rectangle {
                 font-size: 1.25rem;
                 color: Palette.foreground;
                 vertical-alignment: center;
+                min-width: 90px;
             }
-        }
 
-        Text {
-            text: root.status;
-            font-size: 1.17rem;
-            color: root.status == "请求失败" ? #ff3333 : Palette.alternate-foreground;
-            vertical-alignment: center;
+            Rectangle { horizontal-stretch: 1; }
+
+            Text {
+                text: root.selected-text != "" ? root.selected-text : "未选择";
+                font-size: 1rem;
+                color: root.selected-text != "" ? Palette.foreground : Palette.alternate-foreground;
+                vertical-alignment: center;
+            }
+
+            Text {
+                text: "›";
+                font-size: 1.25rem;
+                color: Palette.alternate-foreground;
+                vertical-alignment: center;
+            }
         }
     }
 }
@@ -52,15 +56,17 @@ export component GameDownloadPage inherits PageContainer {
     width: 350px;
     height: 440px;
 
-    in-out property <string> game-version: "26.1.2";
-    in-out property <[ComponentData]> components: [
-        { icon: "🟩", icon_color: #7fa645, name: "Minecraft", status: "26.1.2" },
-        { icon: "⚒️", icon_color: #707070, name: "Forge", status: "可安装" },
-        { icon: "🔥", icon_color: #e65100, name: "NeoForge", status: "可安装" },
-        { icon: "🧵", icon_color: #d7ccc8, name: "Fabric", status: "可安装" },
-        { icon: "🔮", icon_color: #7b1fa2, name: "QuiltMC", status: "请求失败" },
-        { icon: "📁", icon_color: #555555, name: "安装目录", status: "当前游戏文件夹" }
-    ];
+    in-out property <string> version-name: "";
+
+    in property <string> vanilla-selected: "";
+    in property <string> forge-selected: "";
+    in property <string> neoforge-selected: "";
+    in property <string> fabric-selected: "";
+    in property <string> quilt-selected: "";
+    in property <string> optifine-selected: "";
+
+    callback install-game();
+    callback component-clicked(component-type: string);
 
     Text {
         text: "游戏版本名称";
@@ -68,10 +74,17 @@ export component GameDownloadPage inherits PageContainer {
         color: Palette.foreground;
     }
 
-    LineEdit {
-        text: root.game-version;
-        font-size: 1.25rem;
+    Rectangle {
         height: 36px;
+
+        LineEdit {
+            text: root.version-name;
+            font-size: 1.25rem;
+            height: 36px;
+            edited(val) => {
+                root.version-name = val;
+            }
+        }
     }
 
     Rectangle { height: 6px; }
@@ -84,11 +97,53 @@ export component GameDownloadPage inherits PageContainer {
 
     VerticalLayout {
         spacing: StyleMetrics.layout-spacing;
-        for comp in root.components : ComponentRow {
-            icon: comp.icon;
-            icon_color: comp.icon_color;
-            name: comp.name;
-            status: comp.status;
+
+        ComponentRow {
+            icon: "🟩";
+            icon_color: #7fa645;
+            name: "Minecraft";
+            selected-text: root.vanilla-selected;
+            clicked => { root.component-clicked("vanilla"); }
+        }
+
+        ComponentRow {
+            icon: "⚒️";
+            icon_color: #707070;
+            name: "Forge";
+            selected-text: root.forge-selected;
+            clicked => { root.component-clicked("forge"); }
+        }
+
+        ComponentRow {
+            icon: "🔥";
+            icon_color: #e65100;
+            name: "NeoForge";
+            selected-text: root.neoforge-selected;
+            clicked => { root.component-clicked("neoforge"); }
+        }
+
+        ComponentRow {
+            icon: "🧵";
+            icon_color: #d7ccc8;
+            name: "Fabric";
+            selected-text: root.fabric-selected;
+            clicked => { root.component-clicked("fabric"); }
+        }
+
+        ComponentRow {
+            icon: "🔮";
+            icon_color: #7b1fa2;
+            name: "QuiltMC";
+            selected-text: root.quilt-selected;
+            clicked => { root.component-clicked("quilt"); }
+        }
+
+        ComponentRow {
+            icon: "👓";
+            icon_color: #555555;
+            name: "Optifine";
+            selected-text: root.optifine-selected;
+            clicked => { root.component-clicked("optifine"); }
         }
     }
 
@@ -109,6 +164,7 @@ export component GameDownloadPage inherits PageContainer {
 
         TouchArea {
             clicked => {
+                root.install-game();
             }
         }
     }

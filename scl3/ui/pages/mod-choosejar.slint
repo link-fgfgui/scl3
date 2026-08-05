@@ -1,14 +1,26 @@
-import { ComboBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
+import { Button, ComboBox, ScrollView, Palette, StyleMetrics } from "std-widgets.slint";
 import { PageContainer } from "../base/page-container.slint";
 
-struct FileItem {
+export struct ModFileItem {
     filename: string,
+    game-versions: string,
+    loaders: string,
+    download-url: string,
+    primary: bool,
 }
 
-component FileListItem inherits Rectangle {
+component ModFileRow inherits Rectangle {
     in property <string> filename;
-    height: 45px;
-    background: transparent;
+    in property <string> game-versions;
+    in property <string> loaders;
+    in property <bool> primary: false;
+
+    callback download-clicked;
+
+    height: 56px;
+    background: touch.has-hover ? Palette.alternate-background : transparent;
+
+    touch := TouchArea {}
 
     HorizontalLayout {
         padding-left: StyleMetrics.layout-padding;
@@ -19,7 +31,7 @@ component FileListItem inherits Rectangle {
         Rectangle {
             width: 22px;
             height: 22px;
-            background: Palette.foreground;
+            background: Palette.control-background;
             border-radius: 4px;
             y: (parent.height - self.height) / 2;
 
@@ -31,11 +43,78 @@ component FileListItem inherits Rectangle {
             }
         }
 
-        Text {
-            text: root.filename;
-            font-size: 1.17rem;
-            color: Palette.foreground;
-            vertical-alignment: center;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: start;
+
+                Text {
+                    text: root.filename;
+                    font-size: 1.08rem;
+                    color: Palette.foreground;
+                    overflow: elide;
+                }
+
+                if (root.primary) : Rectangle {
+                    background: Palette.accent-background;
+                    border-radius: 3px;
+                    height: 16px;
+                    y: (parent.height - self.height) / 2;
+
+                    Text {
+                        text: "主文件";
+                        color: Palette.accent-foreground;
+                        font-size: 0.75rem;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+
+                Text {
+                    text: root.loaders;
+                    font-size: 0.92rem;
+                    color: Palette.alternate-foreground;
+                }
+
+                Text {
+                    text: root.game-versions;
+                    font-size: 0.92rem;
+                    color: Palette.alternate-foreground;
+                }
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            width: 28px;
+
+            Rectangle {
+                width: 28px;
+                height: 28px;
+                border-radius: 4px;
+                background: dl-touch.has-hover ? Palette.accent-background : Palette.control-background;
+
+                Text {
+                    text: "⬇";
+                    color: dl-touch.has-hover ? Palette.accent-foreground : Palette.control-foreground;
+                    font-size: 1.08rem;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                dl-touch := TouchArea {
+                    clicked => { root.download-clicked(); }
+                }
+            }
         }
     }
 }
@@ -44,16 +123,16 @@ export component ChooseJarPage inherits PageContainer {
     width: 360px;
     height: 540px;
 
-    private property <[FileItem]> mock-files: [
-        { filename: "emi-1.1.24+1.21.1+neoforge.jar" },
-        { filename: "emi-1.1.24+1.21.1+fabric.jar" },
-        { filename: "emi-1.1.24+1.20.1+forge.jar" },
-        { filename: "emi-1.1.24+1.20.1+fabric.jar" },
-        { filename: "emi-1.1.24+1.19.2+forge.jar" },
-        { filename: "emi-1.1.24+1.19.2+fabric.jar" },
-        { filename: "emi-1.1.23+1.20.1+forge.jar" },
-        { filename: "emi-1.1.23+1.20.1+fabric.jar" }
-    ];
+    in-out property <string> mod-title: "";
+    in-out property <string> mod-description: "";
+    in-out property <[ModFileItem]> mod-files: [];
+    in-out property <int> loader-filter-index: 0;
+    in-out property <int> mc-version-filter-index: 0;
+    in-out property <[string]> loader-filter-model: [];
+    in-out property <[string]> mc-version-filter-model: [];
+
+    callback download-file(index: int);
+    callback filter-changed();
 
     HorizontalLayout {
         spacing: StyleMetrics.layout-spacing;
@@ -66,7 +145,7 @@ export component ChooseJarPage inherits PageContainer {
             border-radius: 6px;
 
             Text {
-                text: "EMI";
+                text: root.mod-title;
                 color: Palette.control-foreground;
                 font-size: 1.25rem;
                 horizontal-alignment: center;
@@ -79,14 +158,16 @@ export component ChooseJarPage inherits PageContainer {
             spacing: StyleMetrics.layout-spacing;
 
             Text {
-                text: "EMI";
+                text: root.mod-title;
                 font-size: 1.17rem;
                 color: Palette.foreground;
+                overflow: elide;
             }
             Text {
-                text: "A featureful and accessible item and reci...";
+                text: root.mod-description;
                 font-size: 1rem;
                 color: Palette.alternate-foreground;
+                overflow: elide;
             }
         }
     }
@@ -99,8 +180,12 @@ export component ChooseJarPage inherits PageContainer {
             spacing: StyleMetrics.layout-spacing;
             Text { text: "加载器"; font-size: 0.92rem; color: Palette.alternate-foreground; }
             ComboBox {
-                model: ["全部", "Fabric", "Forge", "NeoForge", "Quilt"];
-                current-index: 0;
+                model: root.loader-filter-model;
+                current-index: root.loader-filter-index;
+                selected(val) => {
+                    root.loader-filter-index = self.current-index;
+                    root.filter-changed();
+                }
             }
         }
 
@@ -109,19 +194,29 @@ export component ChooseJarPage inherits PageContainer {
             spacing: StyleMetrics.layout-spacing;
             Text { text: "MC 版本"; font-size: 0.92rem; color: Palette.alternate-foreground; }
             ComboBox {
-                model: ["全部", "1.21.1", "1.20.1", "1.19.2", "1.18.2"];
-                current-index: 0;
+                model: root.mc-version-filter-model;
+                current-index: root.mc-version-filter-index;
+                selected(val) => {
+                    root.mc-version-filter-index = self.current-index;
+                    root.filter-changed();
+                }
             }
         }
     }
 
     ScrollView {
         VerticalLayout {
-            spacing: StyleMetrics.layout-spacing;
+            spacing: 0px;
             alignment: start;
 
-            for item in root.mock-files : FileListItem {
+            for item[idx] in root.mod-files : ModFileRow {
                 filename: item.filename;
+                game-versions: item.game-versions;
+                loaders: item.loaders;
+                primary: item.primary;
+                download-clicked => {
+                    root.download-file(idx);
+                }
             }
         }
     }

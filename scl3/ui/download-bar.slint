@@ -1,14 +1,13 @@
 import { Palette, StyleMetrics, ProgressIndicator } from "std-widgets.slint";
 
 export component ProgressBar inherits Rectangle {
-    // 暴露属性以便动态更新
     in-out property <string> task-name: "正在安装 Minecraft 1.16.5";
     in-out property <float> progress: 0.50;
 
-    // 基础容器样式
+    callback dismiss();
+
     background: Palette.background;
     height: layout.preferred-height;
-    // min-width: 400px;
 
     layout := VerticalLayout {
 
@@ -16,29 +15,40 @@ export component ProgressBar inherits Rectangle {
         padding-right: StyleMetrics.layout-padding;
 
         padding-bottom: StyleMetrics.layout-padding;
-        // padding-top: StyleMetrics.layout-padding;
-        // 使用 StyleMetrics 提供的标准间距
         spacing: StyleMetrics.layout-spacing;
 
-        // 顶部的文字行（名称与百分比分居两侧）
         HorizontalLayout {
             Text {
                 text: root.task-name;
                 font-size: 1.1rem;
                 color: Palette.foreground;
             }
-            
-            // 弹性的空白占位符，用于将百分比文本推至最右侧
+
             Rectangle {}
 
-            Text {
-                text: Math.round(root.progress * 100) + "%";
-                font-size: 1.1rem;
-                color: Palette.foreground;
+            close-area := TouchArea {
+                width: close-label.preferred-width + 16px;
+                height: close-label.preferred-height + 8px;
+
+                Rectangle {
+                    background: close-area.has-hover ? #e0e0e0 : transparent;
+                    border-radius: 4px;
+
+                    close-label := Text {
+                        text: "✕";
+                        font-size: 1rem;
+                        color: Palette.foreground;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
+
+                clicked => {
+                    root.dismiss();
+                }
             }
         }
 
-        // 底部进度条槽（Track）
         ProgressIndicator {
             progress: root.progress;
         }

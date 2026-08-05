@@ -5,7 +5,6 @@ use crate::avatar::load_avatar_image;
 use crate::config::{AccountConfig, SclConfig};
 use tracing::error;
 
-use slint::ComponentHandle;
 use crate::ui::AppWindow;
 
 pub fn resolve_config_path() -> std::path::PathBuf {
@@ -23,14 +22,17 @@ pub fn save_config(config: &SclConfig) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn save_ui_config(ui: &AppWindow, config: &Arc<Mutex<SclConfig>>) {
-    let mut cfg = config.lock().unwrap();
-    sync_ui_to_config(ui, &mut cfg);
-    if !cfg.download.curseforge_api_key.is_empty() {
-        unsafe {
-            std::env::set_var("CURSEFORGE_API_KEY", &cfg.download.curseforge_api_key);
+    let cfg_clone = {
+        let mut cfg = config.lock().unwrap();
+        sync_ui_to_config(ui, &mut cfg);
+        if !cfg.download.curseforge_api_key.is_empty() {
+            unsafe {
+                std::env::set_var("CURSEFORGE_API_KEY", &cfg.download.curseforge_api_key);
+            }
         }
-    }
-    if let Err(e) = save_config(&cfg) {
+        cfg.clone()
+    };
+    if let Err(e) = save_config(&cfg_clone) {
         error!("保存配置失败: {}", e);
     }
 }
